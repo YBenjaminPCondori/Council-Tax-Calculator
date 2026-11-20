@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite. All figures are processed in memory in the browser. The app uses no accounts, APIs, analytics or persistent storage. For a production build, run `npm run build` and serve `dist/` with a static web server. `npm run preview` serves that build locally.
+Open the local URL printed by Vite. The blue theme starts in light or dark mode based on your device setting. Use the switch in the header to choose a mode. The browser remembers that choice locally. Calculator figures are processed in memory and clear on reload. The app uses no accounts, APIs or analytics. For a production build, run `npm run build` and serve `dist/` with a static web server. `npm run preview` serves that build locally.
 
 ## Engine and verification
 
