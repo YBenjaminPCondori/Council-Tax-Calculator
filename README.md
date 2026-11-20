@@ -1,2 +1,21 @@
-# Council Tax Calculator
+# Newham Council Tax Reduction Calculator
 
+A browser calculator for the 2026–27 working-age scenario. The React interface accepts a Council Tax band, employment figures, and recurring benefit payments. Supply a weekly applicable amount and, if there are assessable earnings, a weekly earnings disregard from an assessment or a scenario you want to test. The estimate uses Newham’s full band charge and assumes a £0 non-dependant deduction. Newham Council determines the final award.
+
+## Run locally
+
+Use Node.js 20.19+ on the 20.x line or Node.js 22.12+.
+
+```sh
+npm ci
+npm run dev
+```
+
+Open the local URL printed by Vite. All figures are processed in memory in the browser. The app uses no accounts, APIs, analytics or persistent storage. For a production build, run `npm run build` and serve `dist/` with a static web server. `npm run preview` serves that build locally.
+
+## Engine and verification
+
+- `src/engine/calculate.ts` exports the independently testable `calculate(input)` and `toWeekly(amount, frequency)` functions. The result is either a complete estimate or an insufficient-information result with reasons and any known intermediates. Invalid input raises a `CalculationInputError` with a field identifier.
+- `src/engine/policy.ts` holds the year-specific band charges, rates and benefit treatments. `src/engine/money.ts` handles exact arithmetic and money display.
+- Run `npm test` for the synthetic scenarios and the cross-check against Newham’s Band C ready reckoner.
+- See the [mathematical specification and source mapping](docs/calculation-specification.md) for formulas, policy references, rounding and missing rules.
