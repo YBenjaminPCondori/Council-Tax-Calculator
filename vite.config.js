@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "./",
+  publicDir: "band-map/public",
   build: {
     rollupOptions: {
       output: {

@@ -1,10 +1,18 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { CalculationBreakdown, ResultPanel } from './Results'
 import {
   benefitFrequencies, calculate, CalculationInputError, employmentFrequencies,
   type BenefitPayment, type CalculationInput, type CalculationResult,
 } from './engine/calculate'
-import { newhamPolicies, sources, type FinancialYear } from './engine/policy'
+import { newhamPolicies, sources, type CouncilTaxBand, type FinancialYear } from './engine/policy'
+
+const BandMap = lazy(() => import('../band-map/src/BandMap'))
+
+type View = 'calculator' | 'band-map'
+
+function currentView(): View {
+  return window.location.hash === '#band-map' ? 'band-map' : 'calculator'
+}
 
 const initialInput: Omit<CalculationInput, 'benefits'> = {
   year: '2026-27', band: '', payFrequency: 'weekly', grossPay: '', incomeTax: '',
@@ -79,12 +87,30 @@ function ThemePicker() {
 }
 
 export function App() {
+  const [view, setView] = useState(currentView)
   const [input, setInput] = useState(initialInput)
   const [benefits, setBenefits] = useState<BenefitRow[]>([])
   const [result, setResult] = useState<CalculationResult | null>(null)
   const [error, setError] = useState<CalculationInputError | null>(null)
   const nextId = useRef(1)
   const resultHeading = useRef<HTMLHeadingElement>(null)
+  const focusBandOnReturn = useRef(false)
+
+  useEffect(() => {
+    const syncView = () => setView(currentView())
+    window.addEventListener('hashchange', syncView)
+    return () => window.removeEventListener('hashchange', syncView)
+  }, [])
+
+  useEffect(() => {
+    document.title = view === 'band-map' ? 'Council Tax Band Map | Newham' : 'Newham Council Tax Reduction Calculator'
+    if (view !== 'calculator' || !focusBandOnReturn.current) return
+    const frame = requestAnimationFrame(() => {
+      focusBandOnReturn.current = false
+      document.getElementById('band')?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [view])
 
   function invalidate() {
     setResult(null)
@@ -94,6 +120,12 @@ export function App() {
   function update<K extends Exclude<keyof CalculationInput, 'benefits'>>(field: K, value: CalculationInput[K]) {
     setInput(current => ({ ...current, [field]: value }))
     invalidate()
+  }
+
+  function useMapBand(band: CouncilTaxBand) {
+    if (input.band !== band) update('band', band)
+    focusBandOnReturn.current = true
+    window.location.hash = 'calculator'
   }
 
   function changeBenefit(id: number, change: Partial<BenefitPayment>) {
@@ -142,19 +174,36 @@ export function App() {
 
   return (
     <>
-      <a className="skip" href="#calculator">Skip to calculator</a>
+      <a className="skip" href="#main-content" onClick={event => {
+        event.preventDefault()
+        document.getElementById('main-content')?.focus()
+      }}>Skip to content</a>
       <header className="hero">
         <div className="page">
           <div className="hero-top">
-            <p className="eyebrow">Newham · Working age · {policy.label}</p>
+            <p className="eyebrow">{view === 'calculator' ? `Newham · Working age · ${policy.label}` : 'Newham · Beckton'}</p>
             <ThemePicker />
           </div>
-          <h1>Council Tax Reduction Calculator</h1>
-          <p>Estimate how much your Newham Council Tax bill could be reduced using your income and an applicable amount you supply.</p>
+          <nav className="app-navigation" aria-label="Main navigation">
+            <a href="#calculator" aria-current={view === 'calculator' ? 'page' : undefined}>Calculator</a>
+            <a href="#band-map" aria-current={view === 'band-map' ? 'page' : undefined}>Map visualizer</a>
+          </nav>
+          <h1>{view === 'calculator' ? 'Council Tax Reduction Calculator' : 'Council Tax band map'}</h1>
+          <p>{view === 'calculator'
+            ? 'Estimate how much your Newham Council Tax bill could be reduced using your income and an applicable amount you supply.'
+            : 'Explore the flats at Woolspinners House and Softwood House on Carrack Mews.'}</p>
         </div>
       </header>
 
-      <main className="page layout" id="calculator">
+      {view === 'band-map' && (
+        <main className="page map-page" id="main-content" tabIndex={-1}>
+          <Suspense fallback={<p className="map-loading" role="status">Loading the band map…</p>}>
+            <BandMap onUseBand={useMapBand} />
+          </Suspense>
+        </main>
+      )}
+
+      {view === 'calculator' && <main className="page layout" id="main-content" tabIndex={-1}>
         <form className="panel form" onSubmit={submit} noValidate autoComplete="off" aria-labelledby="figures-heading">
           <h2 id="figures-heading">Your figures</h2>
           <fieldset>
@@ -166,6 +215,7 @@ export function App() {
               <Field id="year" label="Financial year" value={input.year} options={yearOptions}
                 error={errorFor('year')} onChange={value => update('year', value as FinancialYear)} />
             </div>
+            <a className="property-map-link" href="#band-map">Find a band on the map</a>
           </fieldset>
 
           <fieldset>
@@ -255,7 +305,7 @@ export function App() {
             </details>
           </aside>
         </div>
-      </main>
+      </main>}
 
       <footer className="page footer">
         <p>Independent calculator using Newham Council’s published figures.</p>

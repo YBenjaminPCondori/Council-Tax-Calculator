@@ -2,24 +2,15 @@
 
 This local browser MVP shows the two target buildings in a north-up site map and a rotatable 3D view.
 
-## Launch
-
-Use Node.js 20.19+ or 22.12+.
-
-```sh
-npm ci
-npm run dev
-```
-
-Open the local URL printed by Vite. To serve the production build, run `npm run build` followed by `npm run preview`. If you already have the included `dist` folder, you can use `npm run preview` after installing dependencies.
+Run the app from the repository root as described in the [main launch guide](../README.md#run-locally), then open **Map visualizer**.
 
 ## Explore
 
-Select Woolspinners House or Softwood House. Move your pointer over a flat in the cutaway to light its interior in its Council Tax band colour. The flat number buttons also respond to keyboard focus. Click or tap a flat to open its full address, band and example room counts. Drag to orbit, scroll to zoom, or use the zoom buttons. **Front view** faces the buildings from Gallions Road. Use **Map** to return to the 50-metre study area centred on the E16 2EG postcode reference point.
+Select Woolspinners House or Softwood House. Use **Use Band … in calculator** to carry a selected flat’s band into the calculator. Move your pointer over a flat in the cutaway to light its interior in its Council Tax band colour. The flat number buttons also respond to keyboard focus. Click or tap a flat to open its full address, band and example room counts. Drag to orbit, scroll to zoom, or use the zoom buttons. **Front view** faces the buildings from Gallions Road. Use **Map** to return to the 50-metre study area centred on the E16 2EG postcode reference point.
 
 ## Edit the bands
 
-Edit `public/council-tax-bands.json` in the source project. If serving the bundled build directly, edit `dist/council-tax-bands.json` and refresh. The building keys are `woolspinners` and `softwood`. Each contains one value for each flat number from 1 to 14. Use A–H, or `null` for an unknown band.
+Edit `band-map/public/council-tax-bands.json` from the repository root. A production build copies it to `dist/council-tax-bands.json`. The building keys are `woolspinners` and `softwood`. Each contains one value for each flat number from 1 to 14. Use A–H, or `null` for an unknown band.
 
 ## Sources and model limits
 

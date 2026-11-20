@@ -116,7 +116,7 @@ export function flatAddress(building: Building, flat: number) {
 }
 
 export async function loadBands(signal: AbortSignal): Promise<BandData> {
-  const url = new URL("council-tax-bands.json", document.baseURI);
+  const url = new URL(`${import.meta.env.BASE_URL}council-tax-bands.json`, document.baseURI);
   const response = await fetch(url, { cache: "no-cache", signal });
   if (!response.ok) throw new Error("The Council Tax data could not be loaded.");
   const values: unknown = await response.json();

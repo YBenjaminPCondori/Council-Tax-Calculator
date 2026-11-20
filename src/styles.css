@@ -73,6 +73,14 @@ a { color: var(--accent); text-underline-offset: .2em; }
 .theme-picker button:hover { background: var(--tint); }
 .theme-picker button[aria-pressed='true'] { background: var(--action); color: var(--action-text); }
 
+.app-navigation { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .9rem; }
+.app-navigation a { padding: .45rem .8rem; border: 1px solid transparent; border-radius: .5rem; font-weight: 700; text-decoration: none; }
+.app-navigation a:hover { background: var(--surface); border-color: var(--border); }
+.app-navigation a[aria-current='page'] { background: var(--action); color: var(--action-text); }
+.property-map-link { display: inline-block; margin-top: .75rem; font-size: .92rem; font-weight: 650; }
+.map-page { padding-block: 1.65rem; }
+.map-loading { padding: 1rem; color: var(--muted); }
+
 .layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.45rem; align-items: start; padding-block: 1.65rem; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: .85rem; }
 .form, .scope { padding: clamp(1rem, 2.6vw, 1.75rem); }
