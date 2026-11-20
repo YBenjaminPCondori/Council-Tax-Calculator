@@ -13,6 +13,7 @@ const initialInput: Omit<CalculationInput, 'benefits'> = {
 
 type BenefitRow = BenefitPayment & { id: number }
 type Options = Readonly<Record<string, string>>
+type Theme = 'light' | 'dark'
 
 type FieldProps = {
   id: string
@@ -55,6 +56,27 @@ function Field({ id, label, value, onChange, error, hint, options, placeholder, 
 }
 
 const yearOptions = Object.fromEntries(Object.entries(newhamPolicies).map(([year, policy]) => [year, policy.label]))
+
+function ThemePicker() {
+  const [theme, setTheme] = useState<Theme>(() => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
+
+  function changeTheme(next: Theme) {
+    setTheme(next)
+    document.documentElement.dataset.theme = next
+    try {
+      window.localStorage.setItem('newham-ctr-theme', next)
+    } catch {
+      // The theme still applies to the current page.
+    }
+  }
+
+  return (
+    <div className="theme-picker" role="group" aria-label="Colour theme">
+      <button type="button" aria-label="Light mode" aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}>Light</button>
+      <button type="button" aria-label="Dark mode" aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}>Dark</button>
+    </div>
+  )
+}
 
 export function App() {
   const [input, setInput] = useState(initialInput)
@@ -123,7 +145,10 @@ export function App() {
       <a className="skip" href="#calculator">Skip to calculator</a>
       <header className="hero">
         <div className="page">
-          <p className="eyebrow">Newham · Working age · {policy.label}</p>
+          <div className="hero-top">
+            <p className="eyebrow">Newham · Working age · {policy.label}</p>
+            <ThemePicker />
+          </div>
           <h1>Council Tax Reduction Calculator</h1>
           <p>Estimate how much your Newham Council Tax bill could be reduced using your income and an applicable amount you supply.</p>
         </div>
