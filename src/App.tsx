@@ -1,10 +1,12 @@
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
-import { CalculationBreakdown, ResultPanel } from './Results'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { BandGuide } from './BandGuide'
+import { WalkthroughPanel } from './Results'
 import {
   benefitFrequencies, calculate, CalculationInputError, employmentFrequencies,
-  type BenefitPayment, type CalculationInput, type CalculationResult,
+  type BenefitPayment, type CalculationInput,
 } from './engine/calculate'
 import { newhamPolicies, sources, type CouncilTaxBand, type FinancialYear } from './engine/policy'
+import { buildWalkthrough } from './walkthrough'
 
 const BandMap = lazy(() => import('../band-map/src/BandMap'))
 
@@ -90,11 +92,23 @@ export function App() {
   const [view, setView] = useState(currentView)
   const [input, setInput] = useState(initialInput)
   const [benefits, setBenefits] = useState<BenefitRow[]>([])
-  const [result, setResult] = useState<CalculationResult | null>(null)
+  const [guideOpen, setGuideOpen] = useState(false)
   const [error, setError] = useState<CalculationInputError | null>(null)
   const nextId = useRef(1)
   const resultHeading = useRef<HTMLHeadingElement>(null)
   const focusBandOnReturn = useRef(false)
+  const guideTrigger = useRef<HTMLButtonElement>(null)
+  const guideHeading = useRef<HTMLHeadingElement>(null)
+
+  const { trace, validationError } = useMemo(() => {
+    const scenario = { ...input, benefits }
+    try {
+      return { trace: buildWalkthrough(scenario, calculate(scenario)), validationError: null }
+    } catch (problem) {
+      if (!(problem instanceof CalculationInputError)) throw problem
+      return { trace: buildWalkthrough(scenario, null), validationError: problem }
+    }
+  }, [input, benefits])
 
   useEffect(() => {
     const syncView = () => setView(currentView())
@@ -112,38 +126,34 @@ export function App() {
     return () => cancelAnimationFrame(frame)
   }, [view])
 
-  function invalidate() {
-    setResult(null)
-    setError(null)
-  }
-
   function update<K extends Exclude<keyof CalculationInput, 'benefits'>>(field: K, value: CalculationInput[K]) {
     setInput(current => ({ ...current, [field]: value }))
-    invalidate()
+    setError(null)
   }
 
   function useMapBand(band: CouncilTaxBand) {
     if (input.band !== band) update('band', band)
+    setGuideOpen(false)
     focusBandOnReturn.current = true
     window.location.hash = 'calculator'
   }
 
   function changeBenefit(id: number, change: Partial<BenefitPayment>) {
     setBenefits(current => current.map(row => row.id === id ? { ...row, ...change } : row))
-    invalidate()
+    setError(null)
   }
 
   function addBenefit() {
     const id = nextId.current++
     const index = benefits.length
     setBenefits(current => [...current, { id, type: '', payment: '', frequency: 'weekly' }])
-    invalidate()
+    setError(null)
     requestAnimationFrame(() => document.getElementById(`benefit-type-${index}`)?.focus())
   }
 
   function removeBenefit(id: number, index: number) {
     setBenefits(current => current.filter(row => row.id !== id))
-    invalidate()
+    setError(null)
     requestAnimationFrame(() => {
       const next = document.getElementById(`benefit-type-${index}`) ?? document.getElementById('add-benefit')
       next?.focus()
@@ -152,16 +162,18 @@ export function App() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    try {
-      setResult(calculate({ ...input, benefits }))
-      setError(null)
-      requestAnimationFrame(() => resultHeading.current?.focus())
-    } catch (problem) {
-      if (!(problem instanceof CalculationInputError)) throw problem
-      setResult(null)
-      setError(problem)
-      requestAnimationFrame(() => document.getElementById(problem.field)?.focus())
+    setError(validationError)
+    if (validationError) {
+      requestAnimationFrame(() => document.getElementById(validationError.field)?.focus())
+      return
     }
+    setGuideOpen(false)
+    requestAnimationFrame(() => resultHeading.current?.focus())
+  }
+
+  function showBandGuide(open: boolean) {
+    setGuideOpen(open)
+    requestAnimationFrame(() => (open ? guideHeading : guideTrigger).current?.focus())
   }
 
   function errorFor(id: string) {
@@ -190,7 +202,7 @@ export function App() {
           </nav>
           <h1>{view === 'calculator' ? 'Council Tax Reduction Calculator' : 'Council Tax band map'}</h1>
           <p>{view === 'calculator'
-            ? 'Estimate how much your Newham Council Tax bill could be reduced using your income and an applicable amount you supply.'
+            ? 'Estimate your Newham Council Tax bill and see how your figures are used in the calculation.'
             : 'Explore the flats at Woolspinners House and Softwood House on Carrack Mews.'}</p>
         </div>
       </header>
@@ -215,7 +227,11 @@ export function App() {
               <Field id="year" label="Financial year" value={input.year} options={yearOptions}
                 error={errorFor('year')} onChange={value => update('year', value as FinancialYear)} />
             </div>
-            <a className="property-map-link" href="#band-map">Find a band on the map</a>
+            <div className="property-tools">
+              <button type="button" className="secondary" ref={guideTrigger} aria-expanded={guideOpen}
+                aria-controls="band-guide" onClick={() => showBandGuide(!guideOpen)}>Band guide</button>
+              <a className="property-map-link" href="#band-map">Find a band on the map</a>
+            </div>
           </fieldset>
 
           <fieldset>
@@ -289,8 +305,9 @@ export function App() {
         </form>
 
         <div className="results-column">
-          <ResultPanel result={result} headingRef={resultHeading} />
-          {result && <CalculationBreakdown result={result} />}
+          <WalkthroughPanel trace={trace} headingRef={resultHeading} pendingMessage={validationError?.message} hidden={guideOpen} />
+          <BandGuide year={input.year} selected={input.band} headingRef={guideHeading}
+            hidden={!guideOpen} onBack={() => showBandGuide(false)} />
           <aside className="panel scope" aria-labelledby="scope-heading">
             <h2 id="scope-heading">What this estimate covers</h2>
             <p>This model uses the full annual band charge and assumes £0 in non-dependant deductions. Newham Council determines the final award.</p>

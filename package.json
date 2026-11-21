@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "docx": "^9.16.0",
     "fraction.js": "^5.3.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
