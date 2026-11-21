@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { SiteMap } from "./SiteMap";
+import { flatEightEvidence } from "./flatEightEvidence";
 import {
   bandColour, bandColours, bandLabel, buildingIds, buildings, exampleRoomCounts, flatAddress, flatsFromFront, loadBands,
 } from "./data";
@@ -9,6 +10,8 @@ import "./styles.css";
 
 type Mode = "map" | "building";
 const BuildingView = lazy(() => import("./BuildingView").then(({ BuildingView }) => ({ default: BuildingView })));
+
+const FlatEvidenceDialog = lazy(() => import("./FlatEvidenceDialog"));
 
 function Icon({ name, size = 17 }: { name: "map" | "building" | "pin" | "levels" | "cube"; size?: number }) {
   const paths = {
@@ -49,6 +52,9 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
   const [flat, setFlat] = useState<number | null>(null);
   const [data, setData] = useState<BandData | null>(null);
   const [error, setError] = useState("");
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const map = useRef<HTMLDivElement>(null);
+  const evidenceTrigger = useRef<HTMLButtonElement | null>(null);
   const building = buildings[active];
 
   useEffect(() => {
@@ -77,10 +83,29 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
     setMode("building");
   }
 
-  const selectedBand = data && flat !== null ? data[active][flat] : null;
-  const roomCounts = flat !== null ? exampleRoomCounts(active, flat) : null;
+  function selectFlat(unit: number, trigger?: HTMLButtonElement) {
+    setFlat(unit);
+    if (active !== flatEightEvidence.building || unit !== flatEightEvidence.flat) return;
+    const pin = map.current?.querySelector<HTMLButtonElement>('.flat-pin[data-flat-number="8"]');
+    evidenceTrigger.current = trigger ?? (pin?.style.visibility === "visible" ? pin : null)
+      ?? map.current?.querySelector<HTMLButtonElement>('.unit-chip[data-flat-number="8"]') ?? null;
+    setHovered(null);
+    setEvidenceOpen(true);
+  }
+
+  function closeEvidence() {
+    setEvidenceOpen(false);
+    const trigger = evidenceTrigger.current;
+    requestAnimationFrame(() => {
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    });
+  }
+
+  const selectedHasEvidence = active === flatEightEvidence.building && flat === flatEightEvidence.flat;
+  const selectedBand = selectedHasEvidence ? flatEightEvidence.band : data && flat !== null ? data[active][flat] : null;
+  const roomCounts = flat !== null && !selectedHasEvidence ? exampleRoomCounts(active, flat) : null;
   return (
-    <div className="band-map">
+    <div className="band-map" ref={map}>
       {error && <p className="load-error" role="alert">{error}</p>}
       <div className="map-layout">
         <section className="viewer" aria-label="Building and map viewer">
@@ -93,7 +118,7 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
           </div>
           {mode === "map" ? <SiteMap active={active} onSelect={changeBuilding} /> : data ? (
             <Suspense fallback={<div className="building-stage loading-state" role="status">Loading the 3D view…</div>}>
-              <BuildingView data={data} active={active} hovered={hovered} flat={flat} onHover={setHovered} onFlat={setFlat} />
+              <BuildingView data={data} active={active} hovered={hovered} flat={flat} onHover={setHovered} onFlat={selectFlat} />
             </Suspense>
           ) : (
             <div className="building-stage loading-state" role="status">{error ? "Check the band data file to open the building." : "Loading the band data…"}</div>
@@ -129,13 +154,14 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
                 {flatsFromFront.map(unit => (
                   <button className="unit-chip" type="button" key={unit} aria-pressed={flat === unit}
                     aria-label={`Select flat ${unit}, ${bandLabel(data[active][unit])}`}
-                    data-highlighted={hovered === unit}
+                    data-highlighted={hovered === unit} data-flat-number={unit}
+                    aria-haspopup={active === flatEightEvidence.building && unit === flatEightEvidence.flat ? "dialog" : undefined}
                     style={{ "--flat-band": bandColour(data[active][unit]) } as CSSProperties}
                     onPointerEnter={event => { if (event.pointerType !== "touch") setHovered(unit); }}
                     onPointerLeave={() => setHovered(null)}
                     onFocus={() => setHovered(unit)}
                     onBlur={() => setHovered(null)}
-                    onClick={() => setFlat(unit)}>
+                    onClick={event => selectFlat(unit, event.currentTarget)}>
                     {unit}
                   </button>
                 ))}
@@ -152,19 +178,27 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
             </section>
           )}
 
-          {data && flat !== null && roomCounts && mode === "building" && (
+          {data && flat !== null && mode === "building" && (
             <section className="flat-details" aria-label="Selected flat details" aria-live="polite">
               <div className="detail-heading">
                 <h2>Flat {flat}</h2>
                 <span style={{ background: bandColour(selectedBand) }}>{bandLabel(selectedBand)}</span>
               </div>
               <p>{flatAddress(building, flat)}</p>
-              <p className="example-label">Example room counts</p>
-              <dl>
-                <div><dt>Rooms</dt><dd>{roomCounts.rooms}</dd></div>
-                <div><dt>Bedrooms</dt><dd>{roomCounts.bedrooms}</dd></div>
-              </dl>
-              {selectedBand && (
+              {roomCounts && (
+                <>
+                  <p className="example-label">Example room counts</p>
+                  <dl>
+                    <div><dt>Rooms</dt><dd>{roomCounts.rooms}</dd></div>
+                    <div><dt>Bedrooms</dt><dd>{roomCounts.bedrooms}</dd></div>
+                  </dl>
+                </>
+              )}
+              {selectedHasEvidence ? (
+                <button className="primary use-band-button" type="button" onClick={event => selectFlat(flat, event.currentTarget)}>
+                  View property evidence
+                </button>
+              ) : selectedBand && (
                 <button className="primary use-band-button" type="button" onClick={() => onUseBand(selectedBand)}>
                   Use Band {selectedBand} in calculator
                 </button>
@@ -174,6 +208,14 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
           <Legend counts={counts} />
         </aside>
       </div>
+      {evidenceOpen && (
+        <Suspense fallback={null}>
+          <FlatEvidenceDialog onDismiss={closeEvidence} onUseBand={() => {
+            setEvidenceOpen(false);
+            onUseBand(flatEightEvidence.band);
+          }} />
+        </Suspense>
+      )}
     </div>
   );
 }

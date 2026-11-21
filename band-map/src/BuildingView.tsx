@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { bandColour, bandLabel, buildings, flatsForFloor, flatsFromFront } from "./data";
 import type { BandData, BuildingId } from "./data";
 import { createBuildingScene } from "./buildingScene";
+import { flatEightEvidence } from "./flatEightEvidence";
 import type { BuildingScene } from "./buildingScene";
 
 interface Props {
@@ -11,7 +12,7 @@ interface Props {
   hovered: number | null;
   flat: number | null;
   onHover: (flat: number | null) => void;
-  onFlat: (flat: number) => void;
+  onFlat: (flat: number, trigger?: HTMLButtonElement) => void;
 }
 
 export function BuildingView({ data, active, hovered, flat, onHover, onFlat }: Props) {
@@ -65,14 +66,15 @@ export function BuildingView({ data, active, hovered, flat, onHover, onFlat }: P
           if (node) pins.current.set(unit, node);
           else pins.current.delete(unit);
         } : undefined}
-        className={className} aria-pressed={flat === unit} data-highlighted={hovered === unit}
+        className={className} aria-pressed={flat === unit} data-highlighted={hovered === unit} data-flat-number={unit}
+        aria-haspopup={active === flatEightEvidence.building && unit === flatEightEvidence.flat ? "dialog" : undefined}
         aria-label={`Flat ${unit}, ${bandLabel(band)}`}
         style={{ "--flat-band": bandColour(band) } as CSSProperties}
         onPointerEnter={event => { if (event.pointerType !== "touch") onHover(unit); }}
         onPointerLeave={() => onHover(null)}
         onFocus={() => onHover(unit)}
         onBlur={() => onHover(null)}
-        onClick={() => onFlat(unit)}>
+        onClick={event => onFlat(unit, event.currentTarget)}>
         {unit}
       </button>
     );

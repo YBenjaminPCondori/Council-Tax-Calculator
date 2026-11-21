@@ -8,6 +8,8 @@ Run the app from the repository root as described in the [main launch guide](../
 
 Select Woolspinners House or Softwood House. Use **Use Band … in calculator** to carry a selected flat’s band into the calculator. Move your pointer over a flat in the cutaway to light its interior in its Council Tax band colour. The flat number buttons also respond to keyboard focus. Click or tap a flat to open its full address, band and example room counts. Drag to orbit, scroll to zoom, or use the zoom buttons. **Front view** faces the buildings from Gallions Road. Use **Map** to return to the 50-metre study area centred on the E16 2EG postcode reference point.
 
+Flat 8 at Woolspinners House opens a property evidence viewer with the official Band F listing and EPC. The unmeasured 3D shell and floor outline are illustrative, and Effective Floor Area stays pending until a measured plan is supplied.
+
 ## Edit the bands
 
 Edit `band-map/public/council-tax-bands.json` from the repository root. A production build copies it to `dist/council-tax-bands.json`. The building keys are `woolspinners` and `softwood`. Each contains one value for each flat number from 1 to 14. Use A–H, or `null` for an unknown band.
