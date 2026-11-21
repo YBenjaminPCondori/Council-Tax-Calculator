@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { SiteMap } from "./SiteMap";
 import { flatEightEvidence } from "./flatEightEvidence";
+import { candidateId, candidates, maxComparisons } from "./flatEightComparisons";
+import type { EvidencePackState } from "./EvidencePackPanel";
 import {
   bandColour, bandColours, bandLabel, buildingIds, buildings, exampleRoomCounts, flatAddress, flatsFromFront, loadBands,
 } from "./data";
@@ -52,7 +54,8 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
   const [flat, setFlat] = useState<number | null>(null);
   const [data, setData] = useState<BandData | null>(null);
   const [error, setError] = useState("");
-  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [evidenceView, setEvidenceView] = useState<"property" | "pack" | null>(null);
+  const [draft, setDraft] = useState<EvidencePackState>({ selected: [], notes: {}, letter: null });
   const map = useRef<HTMLDivElement>(null);
   const evidenceTrigger = useRef<HTMLButtonElement | null>(null);
   const building = buildings[active];
@@ -90,11 +93,19 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
     evidenceTrigger.current = trigger ?? (pin?.style.visibility === "visible" ? pin : null)
       ?? map.current?.querySelector<HTMLButtonElement>('.unit-chip[data-flat-number="8"]') ?? null;
     setHovered(null);
-    setEvidenceOpen(true);
+    setEvidenceView("property");
+  }
+
+  function toggleComparison(id: string) {
+    setDraft(current => {
+      if (current.selected.includes(id)) return { ...current, selected: current.selected.filter(key => key !== id) };
+      if (current.selected.length >= maxComparisons) return current;
+      return { ...current, selected: [...current.selected, id] };
+    });
   }
 
   function closeEvidence() {
-    setEvidenceOpen(false);
+    setEvidenceView(null);
     const trigger = evidenceTrigger.current;
     requestAnimationFrame(() => {
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
@@ -103,6 +114,8 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
 
   const selectedHasEvidence = active === flatEightEvidence.building && flat === flatEightEvidence.flat;
   const selectedBand = selectedHasEvidence ? flatEightEvidence.band : data && flat !== null ? data[active][flat] : null;
+  const candidate = flat !== null ? candidates.find(item => item.id === candidateId(active, flat)) : undefined;
+  const isIncluded = candidate ? draft.selected.includes(candidate.id) : false;
   const roomCounts = flat !== null && !selectedHasEvidence ? exampleRoomCounts(active, flat) : null;
   return (
     <div className="band-map" ref={map}>
@@ -203,17 +216,28 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
                   Use Band {selectedBand} in calculator
                 </button>
               )}
+              {candidate && (
+                <button className="band-map-pack-action" type="button" aria-pressed={isIncluded}
+                  disabled={!isIncluded && draft.selected.length >= maxComparisons} onClick={() => toggleComparison(candidate.id)}>
+                  {isIncluded ? "Remove from Flat 8 evidence pack" : "Add to Flat 8 evidence pack"}
+                </button>
+              )}
             </section>
           )}
+          <button className="band-map-pack-action" type="button" aria-haspopup="dialog" onClick={event => {
+            evidenceTrigger.current = event.currentTarget;
+            setEvidenceView("pack");
+          }}>Open Flat 8 evidence pack · {draft.selected.length}/{maxComparisons} selected</button>
           <Legend counts={counts} />
         </aside>
       </div>
-      {evidenceOpen && (
+      {evidenceView && (
         <Suspense fallback={null}>
-          <FlatEvidenceDialog onDismiss={closeEvidence} onUseBand={() => {
-            setEvidenceOpen(false);
-            onUseBand(flatEightEvidence.band);
-          }} />
+          <FlatEvidenceDialog onDismiss={closeEvidence} startInPack={evidenceView === "pack"}
+            draft={draft} onDraftChange={setDraft} onToggleComparison={toggleComparison} onUseBand={() => {
+              setEvidenceView(null);
+              onUseBand(flatEightEvidence.band);
+            }} />
         </Suspense>
       )}
     </div>

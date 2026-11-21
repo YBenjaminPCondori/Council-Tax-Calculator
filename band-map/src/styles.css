@@ -239,3 +239,19 @@
 }
 
 .band-map .use-band-button { width: 100%; margin-top: 12px; }
+
+.band-map .band-map-pack-action {
+  width: 100%;
+  padding: .65rem .68rem;
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  color: var(--ink);
+  background: var(--tint);
+  font-size: .84rem;
+  font-weight: 670;
+}
+.band-map .flat-details .band-map-pack-action { margin-top: .5rem; }
+.band-map .band-map-pack-action[aria-pressed="true"], .band-map .band-map-pack-action:hover:not(:disabled) {
+  border-color: var(--teal);
+}
+.band-map .band-map-pack-action:disabled { opacity: .55; cursor: default; }
