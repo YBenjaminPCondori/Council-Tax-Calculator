@@ -10,6 +10,8 @@ Select Woolspinners House or Softwood House. Use **Use Band … in calculator** 
 
 Flat 8 at Woolspinners House opens a property evidence viewer with the official Band F listing and EPC. The unmeasured 3D shell and floor outline are illustrative, and Effective Floor Area stays pending until a measured plan is supplied.
 
+Choose **Prepare evidence pack** in the Flat 8 viewer, or open the pack from the map sidebar. You can add up to five lower-band flats in the pack or from a flat's map details. The pack flags the size and floor-position gaps, includes links to the band records and EPCs, and lets you edit the draft review letter before downloading a PDF. Draft edits stay in the current map session.
+
 ## Edit the bands
 
 Edit `band-map/public/council-tax-bands.json` from the repository root. A production build copies it to `dist/council-tax-bands.json`. The building keys are `woolspinners` and `softwood`. Each contains one value for each flat number from 1 to 14. Use A–H, or `null` for an unknown band.

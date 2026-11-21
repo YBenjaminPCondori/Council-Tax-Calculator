@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { bandColour, buildings } from "./data";
+import EvidencePackPanel from "./EvidencePackPanel";
+import type { EvidencePackState } from "./EvidencePackPanel";
+import { subjectEffectiveDate as effectiveDate } from "./flatEightComparisons";
 import { flatEightEvidence as evidence } from "./flatEightEvidence";
 import { createEvidenceModel, outline } from "./flatEvidenceModel";
 import "./flat-evidence.css";
 
 const building = buildings[evidence.building];
-const effectiveDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" })
-  .format(new Date(evidence.effectiveFrom));
 
 function OutlinePlan() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -60,9 +61,21 @@ function OutlinePlan() {
   return <canvas className="flat-evidence-plan" ref={canvas} role="img" aria-label="Illustrative top-down outline of Flat 8" />;
 }
 
-export default function FlatEvidenceDialog({ onDismiss, onUseBand }: { onDismiss: () => void; onUseBand: () => void }) {
+interface Props {
+  onDismiss: () => void;
+  onUseBand: () => void;
+  startInPack: boolean;
+  draft: EvidencePackState;
+  onDraftChange: (draft: EvidencePackState) => void;
+  onToggleComparison: (id: string) => void;
+}
+
+export default function FlatEvidenceDialog({ onDismiss, onUseBand, startInPack, draft, onDraftChange, onToggleComparison }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const host = useRef<HTMLDivElement>(null);
+  const packHeading = useRef<HTMLHeadingElement>(null);
+  const packButton = useRef<HTMLButtonElement>(null);
+  const [showPack, setShowPack] = useState(startInPack);
   const model = useRef<ReturnType<typeof createEvidenceModel> | null>(null);
   const [view, setView] = useState<"model" | "plan">("model");
   const [canShowModel, setCanShowModel] = useState(true);
@@ -73,6 +86,10 @@ export default function FlatEvidenceDialog({ onDismiss, onUseBand }: { onDismiss
     element.showModal();
     return () => element.close();
   }, []);
+
+  useLayoutEffect(() => {
+    if (showPack) packHeading.current?.focus();
+  }, [showPack]);
 
   useEffect(() => {
     if (!host.current) return;
@@ -99,7 +116,7 @@ export default function FlatEvidenceDialog({ onDismiss, onUseBand }: { onDismiss
         </div>
         <button type="button" className="flat-evidence-close" aria-label="Close property evidence" onClick={onDismiss}>×</button>
       </header>
-      <div className="flat-evidence-body">
+      <div className="flat-evidence-body" hidden={showPack}>
         <section className="flat-evidence-preview" aria-label="Flat 8 outline">
           <div className="flat-evidence-switch" role="group" aria-label="Outline view">
             <button type="button" disabled={!canShowModel} aria-pressed={view === "model"}
@@ -137,9 +154,19 @@ export default function FlatEvidenceDialog({ onDismiss, onUseBand }: { onDismiss
             <a href={evidence.valuationUrl} target="_blank" rel="noreferrer">Official band record</a>
             <a href={evidence.epcUrl} target="_blank" rel="noreferrer">Energy certificate</a>
           </div>
-          <button className="flat-evidence-use" type="button" onClick={onUseBand}>Use Band {evidence.band} in calculator</button>
+          <div className="flat-evidence-actions">
+            <button ref={packButton} className="flat-evidence-use" type="button" onClick={() => setShowPack(true)}>Prepare evidence pack</button>
+            <button className="evidence-pack-secondary" type="button" onClick={onUseBand}>Use Band {evidence.band} in calculator</button>
+          </div>
         </section>
       </div>
+      {showPack && (
+        <EvidencePackPanel draft={draft} onChange={onDraftChange} onToggle={onToggleComparison} heading={packHeading}
+          onBack={() => {
+            setShowPack(false);
+            requestAnimationFrame(() => packButton.current?.focus());
+          }} />
+      )}
     </dialog>
   );
 }
