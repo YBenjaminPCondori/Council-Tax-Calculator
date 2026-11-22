@@ -209,7 +209,6 @@ function makeBuilding(building: Building, data: BandData, box: SetBox) {
   root.add(roof);
 
   const cutaway = new THREE.Group();
-  const anchors = new Map<number, THREE.Vector3>();
   const flatMaterials = new Map<number, Surface>();
   const glowEdges = new Map<number, THREE.LineSegments>();
   const hitMeshes: THREE.Mesh[] = [];
@@ -243,7 +242,6 @@ function makeBuilding(building: Building, data: BandData, box: SetBox) {
       if (index < 6) {
         box(shell, innerWalls, [0.27, levelHeight - 0.28, visibleDepth], [x + bayWidth / 2, midHeight, zFront - visibleDepth / 2]);
       }
-      anchors.set(flat, new THREE.Vector3(x, midHeight, zFront + 0.18));
 
       const outline = new THREE.PlaneGeometry(roomWidth, levelHeight - 0.46);
       const edge = new THREE.LineSegments(new THREE.EdgesGeometry(outline),
@@ -278,7 +276,7 @@ function makeBuilding(building: Building, data: BandData, box: SetBox) {
       glowEdges.get(flat)!.visible = lit;
     });
   }
-  return { root, anchors, hitMeshes, centre, width, depth, display };
+  return { root, hitMeshes, centre, width, depth, display };
 }
 
 function materialPolygon(points: Point[], material: Surface, y: number) {
@@ -339,7 +337,6 @@ function makeLandscape(parent: THREE.Scene, box: SetBox) {
 }
 
 interface SceneEvents {
-  projectFlat: (flat: number, x: number, y: number, visible: boolean) => void;
   hoverFlat: (flat: number | null) => void;
   selectFlat: (flat: number) => void;
 }
@@ -385,11 +382,8 @@ export function createBuildingScene(host: HTMLElement, data: BandData, events: S
   sun.castShadow = true;
   scene.add(sun);
 
-  let width = 1;
-  let height = 1;
   let active: BuildingId = "woolspinners";
   let frame = 0;
-  const projected = new THREE.Vector3();
   const eye = new THREE.Vector3();
   const ray = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -435,13 +429,6 @@ export function createBuildingScene(host: HTMLElement, data: BandData, events: S
   function draw() {
     frame = 0;
     renderer.render(scene, camera);
-    const model = models[active];
-    const visible = isFacingFront();
-    for (const [flat, anchor] of model.anchors) {
-      model.root.localToWorld(projected.copy(anchor));
-      projected.project(camera);
-      events.projectFlat(flat, (projected.x + 1) * width / 2, (1 - projected.y) * height / 2, visible);
-    }
   }
 
   function redraw() {
@@ -468,8 +455,8 @@ export function createBuildingScene(host: HTMLElement, data: BandData, events: S
   renderer.domElement.addEventListener("pointerleave", clearHover);
   renderer.domElement.addEventListener("pointercancel", clearHover);
   const size = new ResizeObserver(([entry]) => {
-    width = Math.max(1, entry.contentRect.width);
-    height = Math.max(1, entry.contentRect.height);
+    const width = Math.max(1, entry.contentRect.width);
+    const height = Math.max(1, entry.contentRect.height);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();

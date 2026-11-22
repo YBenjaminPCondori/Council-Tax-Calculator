@@ -89,8 +89,7 @@ export default function BandMap({ onUseBand }: { onUseBand: (band: Band) => void
   function selectFlat(unit: number, trigger?: HTMLButtonElement) {
     setFlat(unit);
     if (active !== flatEightEvidence.building || unit !== flatEightEvidence.flat) return;
-    const pin = map.current?.querySelector<HTMLButtonElement>('.flat-pin[data-flat-number="8"]');
-    evidenceTrigger.current = trigger ?? (pin?.style.visibility === "visible" ? pin : null)
+    evidenceTrigger.current = trigger
       ?? map.current?.querySelector<HTMLButtonElement>('.unit-chip[data-flat-number="8"]') ?? null;
     setHovered(null);
     setEvidenceView("property");
