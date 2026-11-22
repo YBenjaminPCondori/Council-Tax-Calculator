@@ -138,14 +138,16 @@ input::placeholder { color: var(--muted); opacity: 1; }
 
 .results-column { display: grid; gap: 1rem; min-width: 0; }
 .walkthrough, .band-guide { padding: clamp(1rem, 2.6vw, 1.5rem); }
-.walkthrough-header, .band-guide-header, .walkthrough-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem .8rem; }
+.band-guide-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem .8rem; }
+.walkthrough-details { margin-top: 1.15rem; padding-top: .8rem; border-top: 1px solid var(--border); }
+.walkthrough-details > summary { width: fit-content; }
+.walkthrough-header { margin-top: .65rem; }
 .step-count { color: var(--accent); font-size: .95rem; font-weight: 700; }
-.step-progress { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .45rem; }
-.step-progress button { position: relative; min-width: 0; min-height: 2rem; border: 0; border-radius: .35rem; background: transparent; }
-.step-progress button::after { position: absolute; content: ''; inset: .83rem 0; border: 1px solid var(--control-border); border-radius: 1rem; }
-.step-progress button[data-complete]::after { border-color: var(--accent); background: var(--accent); }
-.step-progress button[data-highlighted]::after { box-shadow: 0 0 0 3px var(--control-border); }
-.step-progress button[aria-current='step']::after { inset-block: .7rem; }
+.step-progress { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; margin-block: .4rem .7rem; }
+.step-progress button { min-width: 0; min-height: 2.75rem; padding: .35rem; border: 1px solid var(--control-border); border-radius: .4rem; background: var(--surface); color: var(--accent); font-size: .92rem; font-weight: 650; line-height: 1.25; }
+.step-progress button:hover { background: var(--tint); }
+.step-progress button[aria-current='step'] { background: var(--action); color: var(--action-text); border-color: var(--action); }
+.step-progress button[data-highlighted] { box-shadow: inset 0 0 0 2px var(--control-border); }
 .walkthrough-step { padding: clamp(.8rem, 2.3vw, 1.35rem); border-radius: .6rem; border: 1px solid var(--border); background: var(--tint); animation: step-enter 160ms ease-out; }
 @keyframes step-enter { from { opacity: .45; transform: translateY(.2rem); } }
 .walkthrough-step h3 { font-size: clamp(1.25rem, 2.1vw, 1.65rem); line-height: 1.2; }
@@ -169,14 +171,24 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .step-sources { display: flex; flex-wrap: wrap; gap: .25rem .9rem; list-style: none; padding: 0; margin: .55rem 0 0; font-size: .91rem; }
 .walkthrough-benefits ul { margin: .5rem 0 0; padding-left: 1.15rem; }
 .walkthrough-benefits li + li { margin-top: .65rem; }
-.walkthrough-status { margin-top: .85rem; padding: .75rem .85rem; background: var(--result); color: var(--result-text); border-radius: .55rem; }
-.walkthrough-status .hint, .annual-preview, .payable dt { color: var(--result-muted); }
+.walkthrough-status { margin-top: .75rem; padding: clamp(.85rem, 2vw, 1.15rem); background: var(--result); color: var(--result-text); border-radius: .55rem; }
+.annual-estimate dt, .annual-estimate dd span, .payable dt { color: var(--result-muted); }
 .walkthrough-status ul, .scope ul { padding-left: 1.25rem; margin: .45rem 0 0; }
 .walkthrough-status li + li, .scope li + li { margin-top: .3rem; }
-.annual-preview strong { margin-left: .4rem; color: var(--result-text); }
-.payable { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr)); gap: .55rem; padding-top: .7rem; margin-top: .55rem; border-top: 1px solid var(--result-rule); }
+.annual-estimate { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: .85rem 1rem; margin-top: .8rem; }
+.annual-estimate dd, .payable dd { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.annual-estimate dd { font-size: clamp(1.45rem, 3vw, 2.25rem); font-weight: 750; line-height: 1.2; }
+.annual-estimate dd span { display: block; margin-top: .2rem; font-size: .9rem; font-weight: 600; line-height: 1.4; }
+.payable { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr)); gap: .65rem 1rem; padding-top: .65rem; margin-top: .85rem; border-top: 1px solid var(--result-rule); }
 .payable dt { font-size: .92rem; }
-.payable dd { font-size: clamp(1.1rem, 2vw, 1.55rem); font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.payable dd { font-size: 1.15rem; font-weight: 700; }
+.estimate-explanation { margin-top: 1.15rem; }
+.estimate-explanation h3 { font-size: 1.15rem; line-height: 1.25; }
+.estimate-decisions { display: grid; gap: .55rem; margin: .65rem 0 0; padding-inline-start: 1.4rem; }
+.estimate-decisions li { padding: .55rem .7rem; border: 1px solid var(--border); border-radius: .4rem; background: var(--tint); overflow-wrap: anywhere; }
+.estimate-decisions li::marker { color: var(--accent); font-weight: 700; }
+.estimate-decisions p { color: var(--muted); font-size: .95rem; }
+.estimate-receipt { margin-top: .85rem; }
 .walkthrough-footer { margin-top: .85rem; }
 .walkthrough-controls { display: flex; flex-wrap: wrap; gap: .45rem; }
 .walkthrough button:disabled { cursor: default; opacity: .6; }
@@ -205,6 +217,7 @@ summary { color: var(--accent); font-weight: 690; }
   .two { grid-template-columns: minmax(0, 1fr); }
   .layout { gap: 1rem; padding-block: 1rem; }
   .band-guide th, .band-guide td { padding-inline: .4rem; }
+  .step-progress { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -214,6 +227,7 @@ summary { color: var(--accent); font-weight: 690; }
 @media (forced-colors: active) {
   select { appearance: auto; background-image: none; }
   .theme-picker button[aria-pressed='true'] { border-color: ButtonText; }
-  .step-progress button[aria-current='step']::after, .step-progress button[data-highlighted]::after { border-width: 3px; }
+  .step-progress button[aria-current='step'] { border: 2px solid Highlight; }
+  .step-progress button[data-highlighted] { outline: 1px solid Highlight; outline-offset: -4px; }
   .formula-token[data-highlighted], .symbol-grid [data-highlighted] { outline: 2px solid Highlight; }
 }

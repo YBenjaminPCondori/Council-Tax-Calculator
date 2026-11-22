@@ -28,10 +28,15 @@ describe('walkthrough values and receipt', () => {
     expect(labelValue(trace.values.delta)).toBe('£20.00')
     expect(labelValue(trace.values.Q)).toBe('£5.00')
     expect(expression(trace.steps[4].equations[0].symbolic)).toBe('R_w = max(0, M − τ × Δ)')
-    expect(trace.summary).toEqual({
-      status: 'Potential reduction indicated', weeklyReduction: '£32.70', annualReduction: '£1,705.12',
-      annualPayable: '£1,103.21', monthlyPayable: '£91.93',
+    expect(trace.summary).toMatchObject({
+      status: 'Potential reduction indicated', decision: 'Yes', weeklyReduction: '£32.70', annualReduction: '£1,705.12',
+      annualPayable: '£1,103.21', monthlyPayable: '£91.93', annualCharge: '£2,808.33', annualReductionPercentage: '60.72%',
     })
+    expect(trace.summary?.decisions.map(decision => decision.title)).toEqual([
+      'Counted income is £20.00 above the weekly allowance',
+      'The taper deducts £5.00 a week',
+      '£32.70 in weekly reduction remains',
+    ])
   })
 
   it('retains the monthly pay conversion and its pension deduction', () => {
@@ -68,11 +73,25 @@ describe('walkthrough values and receipt', () => {
   })
 
   it('preserves the equality caveat and the zero-earnings disregard exception', () => {
-    expect(walkthrough({ grossPay: '105' }).equalityNote).toContain('exactly equals')
+    const equality = walkthrough({ grossPay: '105' })
+    expect(equality.equalityNote).toContain('exactly equals')
+    expect(equality.summary?.decisions.map(decision => decision.title)).toEqual([
+      'Counted income matches the weekly allowance',
+      'No income taper applies',
+      '£37.70 in weekly reduction remains',
+    ])
     const zeroEarnings = walkthrough({ grossPay: '0', weeklyEarningsDisregard: '' })
     expect(zeroEarnings.summary).not.toBeNull()
+    expect(zeroEarnings.summary?.decisions[0].title).toBe('Counted income is £100.00 below the weekly allowance')
     expect(zeroEarnings.disregardSupplied).toBe(false)
     expect(labelValue(zeroEarnings.values.D)).toBe('£0.00')
+  })
+
+  it('distinguishes a small positive reduction from a taper that uses up the maximum', () => {
+    expect(walkthrough({ grossPay: '255.80' }).summary).toMatchObject({ decision: 'Yes', annualReductionPercentage: '< 0.01%' })
+    const fullTaper = walkthrough({ grossPay: '255.81' }).summary
+    expect(fullTaper).toMatchObject({ decision: 'No', annualReductionPercentage: '0.00%' })
+    expect(fullTaper?.decisions[2].title).toBe('No weekly reduction remains')
   })
 
   it.each(['125', '1000'])('generates a Word receipt for a complete estimate with £%s gross', async grossPay => {

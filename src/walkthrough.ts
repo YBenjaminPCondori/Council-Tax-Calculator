@@ -58,6 +58,11 @@ function displayMoney(value: Amount): string {
   return rounded === '£0.00' && value.compare(zero) > 0 ? '< £0.01' : rounded
 }
 
+function reductionPercentage(reduction: Amount, charge: Amount): string {
+  const rounded = reduction.div(charge).mul(100).round(2).valueOf()
+  return rounded === 0 && reduction.compare(zero) > 0 ? '< 0.01%' : `${rounded.toFixed(2)}%`
+}
+
 function variable(quantity: Quantity): FormulaToken {
   const { text, subscript } = symbols[quantity] as SymbolDefinition
   return { text, subscript, quantity }
@@ -89,6 +94,7 @@ function equation(values: Values, result: Quantity, rhs: Operand[], substitution
 }
 
 type Stage = {
+  label: string
   title: string
   intro: string
   rationale: string
@@ -106,6 +112,34 @@ export const publicSources = {
 
 function scheme(page: number, label: string): Source {
   return { label, url: `${sources.scheme}#page=${page}` }
+}
+
+function explainDecisions(result: Exclude<CalculationResult, { status: 'insufficient' }>) {
+  const difference = result.assessableIncome.sub(result.applicableAmount)
+  const incomePosition = difference.equals(zero) ? 'matches' :
+    `is ${displayMoney(difference.abs())} ${difference.compare(zero) > 0 ? 'above' : 'below'}`
+  const hasTaper = result.excessIncome.compare(zero) > 0
+  const maximum = displayMoney(result.maximumWeeklyReduction)
+  const taper = displayMoney(result.taperDeduction)
+
+  return [
+    {
+      title: `Counted income ${incomePosition} the weekly allowance`,
+      detail: `The calculator compares ${displayMoney(result.assessableIncome)} in counted weekly income with your ${displayMoney(result.applicableAmount)} applicable amount.`,
+    },
+    {
+      title: hasTaper ? `The taper deducts ${taper} a week` : 'No income taper applies',
+      detail: hasTaper
+        ? `The calculator takes ${percent(result.weeklyTaper).text} of the ${displayMoney(result.excessIncome)} above the allowance.`
+        : 'The taper applies only to income above the allowance.',
+    },
+    {
+      title: result.status === 'potential' ? `${displayMoney(result.weeklyReduction)} in weekly reduction remains` : 'No weekly reduction remains',
+      detail: result.status === 'potential'
+        ? `Subtract the ${taper} taper from the ${maximum} weekly maximum (${percent(result.maximumRate).text} of weekly Council Tax in this model).`
+        : `The ${taper} taper deduction meets or exceeds the ${maximum} weekly maximum.`,
+    },
+  ]
 }
 
 export function buildWalkthrough(input: CalculationInput, result: CalculationResult | null) {
@@ -130,8 +164,12 @@ export function buildWalkthrough(input: CalculationInput, result: CalculationRes
 
   const summary = complete ? {
     status: complete.status === 'potential' ? 'Potential reduction indicated' : 'No reduction under the selected assumptions',
+    decision: complete.status === 'potential' ? 'Yes' : 'No',
+    annualCharge: displayMoney(complete.annualCharge),
+    annualReductionPercentage: reductionPercentage(complete.annualReduction, complete.annualCharge),
     weeklyReduction: displayMoney(complete.weeklyReduction), annualReduction: displayMoney(complete.annualReduction),
     annualPayable: displayMoney(complete.annualPayable), monthlyPayable: displayMoney(complete.monthlyPayable),
+    decisions: explainDecisions(complete),
   } : null
   const equalityNote = complete?.atApplicableAmount
     ? 'Income exactly equals the applicable amount. This model uses a zero taper deduction at equality. Ask Newham Council to confirm the treatment in your case.'
@@ -139,6 +177,7 @@ export function buildWalkthrough(input: CalculationInput, result: CalculationRes
 
   const steps: Stage[] = [
     {
+      label: 'Band charge',
       title: 'Find the weekly liability',
       intro: 'Start with the annual Council Tax liability before Council Tax Reduction.',
       rationale: 'The scheme uses liability after any other applicable discounts. This estimate assumes no discounts and uses Newham’s full band charge. Divide by the days in the financial year and multiply by seven.',
@@ -146,6 +185,7 @@ export function buildWalkthrough(input: CalculationInput, result: CalculationRes
       quantities: ['C', 'd', 'W'], sources: [publicSources.charges, scheme(69, 'Scheme paragraph 29(1)')],
     },
     {
+      label: 'Counted income',
       title: 'Work out weekly assessable income',
       intro: 'Convert net pay to a weekly amount, apply the earnings disregard, and add countable benefits.',
       rationale: `Net earnings deduct Income Tax, employee National Insurance, and half of qualifying workplace pension contributions. ${result && hasZeroNet && !result.weeklyDisregard ? 'With zero net earnings, an earnings disregard does not affect the calculation.' : 'The model uses the weekly earnings disregard you supply.'}`,
@@ -157,6 +197,7 @@ export function buildWalkthrough(input: CalculationInput, result: CalculationRes
       sources: [scheme(114, 'Paragraphs 50, 52 and 54'), scheme(279, 'Schedule 7 earnings disregards')],
     },
     {
+      label: 'Weekly maximum',
       title: 'Set the maximum reduction',
       intro: 'Apply the working-age maximum rate to the weekly liability before the income taper.',
       rationale: 'The model assumes a £0 non-dependant deduction. An actual assessment considers whether anyone living with the applicant affects the deduction.',
@@ -165,6 +206,7 @@ export function buildWalkthrough(input: CalculationInput, result: CalculationRes
       quantities: ['rho', 'W', 'N', 'M'], sources: [scheme(69, 'Paragraph 29(1)')],
     },
     {
+      label: 'Income taper',
       title: 'Apply the income taper',
       intro: 'Only weekly income above the applicable amount attracts the taper.',
       rationale: equalityNote ?? 'The estimate uses the applicable amount you supply. The weekly taper is equivalent to applying the scheme’s daily taper across seven days.',
@@ -175,6 +217,7 @@ export function buildWalkthrough(input: CalculationInput, result: CalculationRes
       quantities: ['I', 'A', 'delta', 'tau', 'Q'], sources: [scheme(46, 'Paragraph 17(f)'), scheme(65, 'Paragraphs 26–28')],
     },
     {
+      label: 'Weekly reduction',
       title: 'Calculate the weekly reduction',
       intro: 'Subtract the taper deduction from the maximum weekly reduction, down to a minimum of £0.',
       rationale: complete?.status === 'potential'
@@ -186,6 +229,7 @@ export function buildWalkthrough(input: CalculationInput, result: CalculationRes
       quantities: ['M', 'Q', 'tau', 'delta', 'Rw'], sources: [scheme(85, 'Paragraph 32(3)')],
     },
     {
+      label: 'Annual bill',
       title: 'See the estimated bill',
       intro: 'Convert the weekly reduction to an annual amount and take it off the annual liability.',
       rationale: 'The annual estimate assumes the same figures throughout the financial year. The monthly figure is a twelve-month average. Your bill sets the instalments.',

@@ -190,7 +190,10 @@ export function App() {
       return
     }
     setGuideOpen(false)
-    requestAnimationFrame(() => resultHeading.current?.focus())
+    requestAnimationFrame(() => {
+      resultHeading.current?.focus({ preventScroll: true })
+      resultHeading.current?.scrollIntoView({ block: 'start' })
+    })
   }
 
   function showBandGuide(open: boolean) {
