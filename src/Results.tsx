@@ -116,98 +116,121 @@ export function WalkthroughPanel({ trace, headingRef, pendingMessage, hidden }: 
   }
 
   const summary = trace.summary
-  const status = summary?.status ?? (trace.reasons.length > 0
+  const pendingStatus = trace.reasons.length > 0
     ? 'Insufficient information for an eligibility estimate'
-    : pendingMessage ?? 'Fill in your figures to see the estimate')
+    : pendingMessage ?? 'Fill in your figures to see the estimate'
+  const status = summary ? `${summary.status} (${summary.decision})` : pendingStatus
   const payables = summary ? [
+    ['Original annual charge', summary.annualCharge],
     ['Weekly reduction', summary.weeklyReduction],
-    ['Annual reduction', summary.annualReduction],
-    ['Annual payable', summary.annualPayable],
     ['Monthly average', summary.monthlyPayable],
   ] : []
 
   return (
     <section className="panel walkthrough" id="calculation-walkthrough" aria-labelledby="result-heading" hidden={hidden}>
-      <header className="walkthrough-header">
-        <h2 ref={headingRef} id="result-heading" tabIndex={-1} onFocus={() => setPlaying(false)}>Calculation walkthrough</h2>
-        <p className="step-count" role="status">Step {stepIndex + 1} of {trace.steps.length}</p>
-      </header>
-
-      <nav className="step-progress" aria-label="Calculation stages" onKeyDown={onNavigationKey}>
-        {trace.steps.map(({ title, quantities, equations }, index) => {
-          const updated = quantities.some(quantity => highlighted.includes(quantity)) ||
-            equations.some(({ substituted }) => substituted?.some(token => token.quantity && highlighted.includes(token.quantity)))
-          return <button key={title} type="button" onClick={() => selectStep(index)}
-            aria-label={`Step ${index + 1}: ${title}${updated ? ' (updated)' : ''}`}
-            aria-current={index === stepIndex ? 'step' : undefined}
-            data-complete={index <= stepIndex || undefined} data-highlighted={updated || undefined} />
-        })}
-      </nav>
-
-      <article className="walkthrough-step" key={stepIndex} aria-labelledby="walkthrough-step-title"
-        onFocusCapture={() => setPlaying(false)}>
-        <h3 id="walkthrough-step-title">{step.title}</h3>
-        <p className="step-intro">{step.intro}</p>
-        <div className="formula-block">
-          {step.equations.map(({ symbolic }, index) => (
-            <p className="symbolic-formula" key={index}><Formula tokens={symbolic} /></p>
-          ))}
-          <h4>With your figures</h4>
-          {step.equations.map(({ substituted }, index) => (
-            <p className="numeric-formula" key={index}>
-              {substituted ? <Formula tokens={substituted} highlighted={highlighted} /> : 'Waiting for the required figures.'}
-            </p>
-          ))}
-        </div>
-
-        <dl className="symbol-grid">
-          {step.quantities.map(quantity => {
-            const symbol = describeQuantity(trace, quantity)
-            return <div key={quantity} data-highlighted={highlighted.includes(quantity) || undefined}>
-              <dt><span className="symbol-name"><Formula tokens={[symbol]} /></span> {symbol.label}</dt>
-              <dd>{labelValue(symbol.value)}</dd>
-            </div>
-          })}
-        </dl>
-
-        {stepIndex === 1 && <BenefitAssessment benefits={trace.benefits} />}
-        <div className="step-rationale">
-          <h4>Why this step applies</h4>
-          <p>{step.rationale}</p>
-          {step.sources.length > 0 && <ul className="step-sources">
-            {step.sources.map(source => <li key={source.url}><a href={source.url}>{source.label}</a></li>)}
-          </ul>}
-        </div>
-      </article>
-
+      <h2 ref={headingRef} id="result-heading" tabIndex={-1} onFocus={() => setPlaying(false)}>Your estimate</h2>
       <div className="walkthrough-status">
         <p role="status"><strong>{status}</strong></p>
         {!summary && trace.reasons.length > 0 && <ul>{trace.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}
-        {summary && (stepIndex === lastIndex ? (
+        {summary && <>
+          <dl className="annual-estimate">
+            <div>
+              <dt>Estimated annual bill</dt>
+              <dd>{summary.annualPayable}</dd>
+            </div>
+            <div>
+              <dt>Annual reduction</dt>
+              <dd>{summary.annualReduction} <span>{summary.annualReductionPercentage} of original charge</span></dd>
+            </div>
+          </dl>
           <dl className="payable">
             {payables.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
-        ) : <p className="annual-preview">Estimated annual bill <strong>{summary.annualPayable}</strong></p>)}
-        {trace.equalityNote && stepIndex !== 3 && <p className="hint">{trace.equalityNote}</p>}
-        {summary && stepIndex === lastIndex && (
-          <p className="hint">The calculation uses unrounded figures. Newham Council determines the final award.</p>
-        )}
+        </>}
       </div>
 
-      <div className="walkthrough-footer">
-        <div className="walkthrough-controls" role="group" aria-label="Walkthrough playback" onKeyDown={onNavigationKey}>
-          <button className="secondary" type="button" disabled={stepIndex === 0} onClick={() => selectStep(stepIndex - 1)}>Previous</button>
-          <button className="secondary" type="button" onClick={playOrPause}>
-            {stepIndex === lastIndex ? 'Replay' : playing ? 'Pause' : 'Play'}
-          </button>
-          <button className="secondary" type="button" disabled={stepIndex === lastIndex} onClick={() => selectStep(stepIndex + 1)}>Next</button>
+      {summary && <div className="estimate-explanation">
+        <h3>How the calculator reached this estimate</h3>
+        <ol className="estimate-decisions">
+          {summary.decisions.map(({ title, detail }) => <li key={title}>
+            <strong>{title}</strong>
+            <p>{detail}</p>
+          </li>)}
+        </ol>
+        {trace.equalityNote && <p className="hint">{trace.equalityNote}</p>}
+        <p className="hint">Newham Council determines the final award.</p>
+      </div>}
+
+      <details className="walkthrough-details" onToggle={event => {
+        if (!event.currentTarget.open) setPlaying(false)
+      }}>
+        <summary>Full calculation and formulas</summary>
+        <header className="walkthrough-header">
+          <p className="step-count" role="status">Step {stepIndex + 1} of {trace.steps.length}</p>
+        </header>
+
+        <nav className="step-progress" aria-label="Calculation stages" onKeyDown={onNavigationKey}>
+          {trace.steps.map(({ label, title, quantities, equations }, index) => {
+            const updated = quantities.some(quantity => highlighted.includes(quantity)) ||
+              equations.some(({ substituted }) => substituted?.some(token => token.quantity && highlighted.includes(token.quantity)))
+            return <button key={title} type="button" onClick={() => selectStep(index)}
+              aria-label={`Step ${index + 1}: ${label}${updated ? ' (updated)' : ''}`}
+              aria-current={index === stepIndex ? 'step' : undefined}
+              data-highlighted={updated || undefined}>{label}</button>
+          })}
+        </nav>
+
+        <article className="walkthrough-step" key={stepIndex} aria-labelledby="walkthrough-step-title"
+          onFocusCapture={() => setPlaying(false)}>
+          <h3 id="walkthrough-step-title">{step.title}</h3>
+          <p className="step-intro">{step.intro}</p>
+          <div className="formula-block">
+            {step.equations.map(({ symbolic }, index) => (
+              <p className="symbolic-formula" key={index}><Formula tokens={symbolic} /></p>
+            ))}
+            <h4>With your figures</h4>
+            {step.equations.map(({ substituted }, index) => (
+              <p className="numeric-formula" key={index}>
+                {substituted ? <Formula tokens={substituted} highlighted={highlighted} /> : 'Waiting for the required figures.'}
+              </p>
+            ))}
+          </div>
+
+          <dl className="symbol-grid">
+            {step.quantities.map(quantity => {
+              const symbol = describeQuantity(trace, quantity)
+              return <div key={quantity} data-highlighted={highlighted.includes(quantity) || undefined}>
+                <dt><span className="symbol-name"><Formula tokens={[symbol]} /></span> {symbol.label}</dt>
+                <dd>{labelValue(symbol.value)}</dd>
+              </div>
+            })}
+          </dl>
+
+          {stepIndex === 1 && <BenefitAssessment benefits={trace.benefits} />}
+          <div className="step-rationale">
+            <h4>Why this step applies</h4>
+            <p>{step.rationale}</p>
+            {step.sources.length > 0 && <ul className="step-sources">
+              {step.sources.map(source => <li key={source.url}><a href={source.url}>{source.label}</a></li>)}
+            </ul>}
+          </div>
+        </article>
+
+        <div className="walkthrough-footer">
+          <div className="walkthrough-controls" role="group" aria-label="Walkthrough playback" onKeyDown={onNavigationKey}>
+            <button className="secondary" type="button" disabled={stepIndex === 0} onClick={() => selectStep(stepIndex - 1)}>Previous</button>
+            <button className="secondary" type="button" onClick={playOrPause}>
+              {stepIndex === lastIndex ? 'Replay' : playing ? 'Pause' : 'Play'}
+            </button>
+            <button className="secondary" type="button" disabled={stepIndex === lastIndex} onClick={() => selectStep(stepIndex + 1)}>Next</button>
+          </div>
         </div>
-        {stepIndex === lastIndex && summary && (
-          <button type="button" className="primary" onClick={downloadReceipt} disabled={exporting}>
-            {exporting ? 'Creating receipt…' : 'Download Word receipt'}
-          </button>
-        )}
-      </div>
+      </details>
+      {summary && <div className="estimate-receipt">
+        <button type="button" className="secondary" onClick={downloadReceipt} disabled={exporting}>
+          {exporting ? 'Creating receipt…' : 'Download Word receipt'}
+        </button>
+      </div>}
       {exportError && <p className="error" role="alert">Could not create the Word receipt. Try downloading it again.</p>}
     </section>
   )
