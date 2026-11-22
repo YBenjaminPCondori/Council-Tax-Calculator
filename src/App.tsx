@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { AssessmentHelp, assessmentFigures } from './AssessmentFigures'
 import { BandGuide } from './BandGuide'
 import { GuidedQuestions, type BenefitRow } from './GuidedQuestions'
 import { WalkthroughPanel } from './Results'
@@ -48,7 +49,7 @@ function Field({ id, label, value, onChange, error, hint, options, placeholder, 
     <div className="field">
       <label htmlFor={id}>{label}</label>
       {options ? (
-        <select {...control} onChange={event => onChange(event.target.value)}>
+        <select {...control} data-empty={value === '' || undefined} onChange={event => onChange(event.target.value)}>
           {placeholder && <option value="">{placeholder}</option>}
           {Object.entries(options).map(([key, name]) => <option key={key} value={key}>{name}</option>)}
         </select>
@@ -190,9 +191,14 @@ export function App() {
       return
     }
     setGuideOpen(false)
+    focusEstimate()
+  }
+
+  function focusEstimate() {
     requestAnimationFrame(() => {
-      resultHeading.current?.focus({ preventScroll: true })
-      resultHeading.current?.scrollIntoView({ block: 'start' })
+      const heading = resultHeading.current
+      heading?.focus({ preventScroll: true })
+      heading?.scrollIntoView({ block: 'start' })
     })
   }
 
@@ -248,16 +254,18 @@ export function App() {
         </main>
       )}
 
-      {view === 'calculator' && calculatorMode === 'guided' && (
-        <main className="page guided-layout" id="main-content" tabIndex={-1}>
-          <GuidedQuestions figures={input} benefits={benefits} result={result} validationError={validationError}
+      {view === 'calculator' && <main className={calculatorMode === 'form' ? 'page layout' : 'page guided-layout'} id="main-content" tabIndex={-1}>
+        <AssessmentHelp />
+        <div className="guided-content" hidden={calculatorMode !== 'guided'}>
+          <GuidedQuestions active={calculatorMode === 'guided'} figures={input} benefits={benefits}
             onUpdate={update} onChangeBenefit={changeBenefit} onAddBenefit={appendBenefit}
-            onRemoveBenefit={discardBenefit} onClearBenefits={clearBenefits} onReset={resetFigures} />
-        </main>
-      )}
-
-      {view === 'calculator' && calculatorMode === 'form' && <main className="page layout" id="main-content" tabIndex={-1}>
-        <form className="panel form" onSubmit={submit} noValidate autoComplete="off" aria-labelledby="figures-heading">
+            onRemoveBenefit={discardBenefit} onClearBenefits={clearBenefits} onReset={resetFigures} onSubmit={focusEstimate}
+            renderEstimate={editAnswer => (
+              <WalkthroughPanel trace={trace} result={result} headingRef={resultHeading}
+                validationError={validationError} onEdit={editAnswer} />
+            )} />
+        </div>
+        {calculatorMode === 'form' && <form className="panel form" onSubmit={submit} noValidate autoComplete="off" aria-labelledby="figures-heading">
           <h2 id="figures-heading">Your figures</h2>
           <fieldset>
             <legend>Property</legend>
@@ -328,13 +336,13 @@ export function App() {
           <fieldset>
             <legend>Assessment figures</legend>
             <div className="fields">
-              <Field id="weeklyApplicableAmount" label="Applicable amount per week" value={input.weeklyApplicableAmount}
+              <Field id="weeklyApplicableAmount" label={assessmentFigures.weeklyApplicableAmount.label} value={input.weeklyApplicableAmount}
                 placeholder="Enter an amount if known" error={errorFor('weeklyApplicableAmount')}
-                hint="The applicable amount is the income allowance for your circumstances. Supply a known amount or one you want to model."
+                hint={assessmentFigures.weeklyApplicableAmount.explanation}
                 onChange={value => update('weeklyApplicableAmount', value)} />
-              <Field id="weeklyEarningsDisregard" label="Earnings disregard per week" value={input.weeklyEarningsDisregard}
+              <Field id="weeklyEarningsDisregard" label={assessmentFigures.weeklyEarningsDisregard.label} value={input.weeklyEarningsDisregard}
                 placeholder="Enter an amount if known" error={errorFor('weeklyEarningsDisregard')}
-                hint="For paid work, supply the weekly amount to set aside under Schedule 7 of the scheme. Enter £0 only if your scenario assumes a zero disregard."
+                hint={assessmentFigures.weeklyEarningsDisregard.explanation + ' Leave blank if you have no take-home pay or you’re unsure.'}
                 onChange={value => update('weeklyEarningsDisregard', value)} />
             </div>
           </fieldset>
@@ -343,10 +351,11 @@ export function App() {
             <button className="primary" type="submit">Calculate estimate</button>
             <p className="hint">Your figures stay in this page and clear when you reload.</p>
           </div>
-        </form>
+        </form>}
 
-        <div className="results-column">
-          <WalkthroughPanel trace={trace} headingRef={resultHeading} pendingMessage={validationError?.message} hidden={guideOpen} />
+        {calculatorMode === 'form' && <div className="results-column">
+          <WalkthroughPanel trace={trace} result={result} headingRef={resultHeading} validationError={error} hidden={guideOpen}
+            onEdit={id => document.getElementById(id)?.focus()} />
           <BandGuide year={input.year} selected={input.band} headingRef={guideHeading}
             hidden={!guideOpen} onBack={() => showBandGuide(false)} />
           <aside className="panel scope" aria-labelledby="scope-heading">
@@ -362,7 +371,7 @@ export function App() {
               </ul>
             </details>
           </aside>
-        </div>
+        </div>}
       </main>}
 
       <footer className="page footer">

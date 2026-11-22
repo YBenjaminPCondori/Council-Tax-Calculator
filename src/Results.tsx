@@ -1,13 +1,17 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { assessmentFigures, newhamClaim, type AssessmentFigure } from './AssessmentFigures'
+import type { CalculationInputError, CalculationResult } from './engine/calculate'
 import {
   changedQuantities, describeQuantity, labelValue, type FormulaToken, type Quantity, type Walkthrough,
 } from './walkthrough'
 
 type WalkthroughPanelProps = {
   trace: Walkthrough
+  result: CalculationResult | null
   headingRef: RefObject<HTMLHeadingElement | null>
-  pendingMessage?: string
-  hidden: boolean
+  validationError?: CalculationInputError | null
+  onEdit: (id: string) => void
+  hidden?: boolean
 }
 
 const playbackDelay = 6500
@@ -42,7 +46,41 @@ function BenefitAssessment({ benefits }: { benefits: Walkthrough['benefits'] }) 
   )
 }
 
-export function WalkthroughPanel({ trace, headingRef, pendingMessage, hidden }: WalkthroughPanelProps) {
+function MissingInformation({ result, onEdit }: {
+  result: Extract<CalculationResult, { status: 'insufficient' }>
+  onEdit: (id: string) => void
+}) {
+  const missing: AssessmentFigure[] = []
+  if (result.applicableAmount === null) missing.push('weeklyApplicableAmount')
+  if (result.assessableEarnings === null) missing.push('weeklyEarningsDisregard')
+
+  return (
+    <div className="missing-information">
+      <ul>
+        {missing.map(id => {
+          const figure = assessmentFigures[id]
+          return (
+            <li key={id}>
+              <strong>{figure.label}</strong>
+              <p>{figure.nextStep}</p>
+              <button className="text-button" type="button" onClick={() => onEdit(id)}>Enter {figure.label.toLowerCase()}</button>
+            </li>
+          )
+        })}
+        {result.benefits.map(({ rule, countable }, index) => countable === null && (
+          <li key={index}>
+            <strong>{rule.label}</strong>
+            <p>{rule.rule} Ask Newham Benefits how to include this payment.</p>
+            <button className="text-button" type="button" onClick={() => onEdit(`benefit-type-${index}`)}>Review benefit payment {index + 1}</button>
+          </li>
+        ))}
+      </ul>
+      <a href={newhamClaim} target="_blank" rel="noreferrer">Contact Newham Benefits (opens in a new tab)</a>
+    </div>
+  )
+}
+
+export function WalkthroughPanel({ trace, result, headingRef, validationError, onEdit, hidden }: WalkthroughPanelProps) {
   const [stepIndex, setStepIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [highlighted, setHighlighted] = useState<Quantity[]>([])
@@ -116,13 +154,12 @@ export function WalkthroughPanel({ trace, headingRef, pendingMessage, hidden }: 
   }
 
   const summary = trace.summary
-  const pendingStatus = trace.reasons.length > 0
+  const pendingStatus = result?.status === 'insufficient'
     ? 'Insufficient information for an eligibility estimate'
-    : pendingMessage ?? 'Fill in your figures to see the estimate'
+    : validationError?.message ?? 'Fill in your figures to see the estimate'
   const status = summary ? `${summary.status} (${summary.decision})` : pendingStatus
   const payables = summary ? [
     ['Original annual charge', summary.annualCharge],
-    ['Weekly reduction', summary.weeklyReduction],
     ['Monthly average', summary.monthlyPayable],
   ] : []
 
@@ -131,7 +168,6 @@ export function WalkthroughPanel({ trace, headingRef, pendingMessage, hidden }: 
       <h2 ref={headingRef} id="result-heading" tabIndex={-1} onFocus={() => setPlaying(false)}>Your estimate</h2>
       <div className="walkthrough-status">
         <p role="status"><strong>{status}</strong></p>
-        {!summary && trace.reasons.length > 0 && <ul>{trace.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>}
         {summary && <>
           <dl className="annual-estimate">
             <div>
@@ -139,8 +175,16 @@ export function WalkthroughPanel({ trace, headingRef, pendingMessage, hidden }: 
               <dd>{summary.annualPayable}</dd>
             </div>
             <div>
-              <dt>Annual reduction</dt>
-              <dd>{summary.annualReduction} <span>{summary.annualReductionPercentage} of original charge</span></dd>
+              <dt>Annual savings</dt>
+              <dd>{summary.annualReduction}</dd>
+            </div>
+            <div>
+              <dt>Weekly savings</dt>
+              <dd>{summary.weeklyReduction}</dd>
+            </div>
+            <div>
+              <dt>Percentage reduction</dt>
+              <dd>{summary.annualReductionPercentage}</dd>
             </div>
           </dl>
           <dl className="payable">
@@ -148,6 +192,9 @@ export function WalkthroughPanel({ trace, headingRef, pendingMessage, hidden }: 
           </dl>
         </>}
       </div>
+
+      {result?.status === 'insufficient' && <MissingInformation result={result} onEdit={onEdit} />}
+      {validationError && <button className="text-button" type="button" onClick={() => onEdit(validationError.field)}>Correct answer</button>}
 
       {summary && <div className="estimate-explanation">
         <h3>How the calculator reached this estimate</h3>

@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import {
   benefitFrequencies, employmentFrequencies, type BenefitPayment, type CalculationInput,
-  type CalculationInputError, type CalculationResult,
 } from './engine/calculate'
 import { parsePounds } from './engine/money'
-import { newhamPolicies } from './engine/policy'
-import { guidedResult } from './guidedResult'
+import { newhamPolicies, sources } from './engine/policy'
+import { assessmentFigures } from './AssessmentFigures'
 
 type Figures = Omit<CalculationInput, 'benefits'>
 export type BenefitRow = BenefitPayment & { id: number }
@@ -18,58 +17,72 @@ type Question = {
   hint?: string
   options?: Options
   blankAllowed?: boolean
-  save: (value: string) => string | void
-  remove?: () => void
+  change: (value: string) => void
+  check?: { title: string; guidance: ReactNode }
 }
 
 type Props = {
+  active: boolean
   figures: Figures
   benefits: BenefitRow[]
-  result: CalculationResult | null
-  validationError: CalculationInputError | null
   onUpdate: <K extends keyof Figures>(key: K, value: Figures[K]) => void
   onChangeBenefit: (id: number, change: Partial<BenefitPayment>) => void
   onAddBenefit: () => void
   onRemoveBenefit: (id: number) => void
   onClearBenefits: () => void
   onReset: () => void
+  onSubmit: () => void
+  renderEstimate: (editAnswer: (id: string) => void) => ReactNode
 }
 
 const yesNo = { yes: 'Yes', no: 'No' } as const
+const yesNoUnsure = { ...yesNo, unknown: 'Not sure' } as const
 const years = Object.fromEntries(Object.entries(newhamPolicies).map(([key, value]) => [key, value.label]))
 
-export function GuidedQuestions(props: Props) {
-  const { figures, benefits, result, validationError, onUpdate, onChangeBenefit,
-    onAddBenefit, onRemoveBenefit, onClearBenefits, onReset } = props
-  const [index, setIndex] = useState(0)
-  const [scope, setScope] = useState('')
-  const [benefitsAnswer, setBenefitsAnswer] = useState('')
-  const [draft, setDraft] = useState<string | null>(null)
+export function GuidedQuestions({
+  active, figures, benefits, onUpdate, onChangeBenefit, onAddBenefit,
+  onRemoveBenefit, onClearBenefits, onReset, onSubmit, renderEstimate,
+}: Props) {
+  const [stepId, setStepId] = useState('newham')
+  const [newham, setNewham] = useState('')
+  const [workingAge, setWorkingAge] = useState('')
+  const [benefitsChoice, setBenefitsChoice] = useState<string | null>(null)
+  const [noBenefitsConfirmed, setNoBenefitsConfirmed] = useState(false)
+  const [moreBenefits, setMoreBenefits] = useState('')
   const [issue, setIssue] = useState('')
+  const [checking, setChecking] = useState(false)
   const heading = useRef<HTMLHeadingElement>(null)
+  const controlRef = useRef<HTMLInputElement | HTMLSelectElement>(null)
   const policy = newhamPolicies[figures.year]
   const bandOptions = Object.fromEntries(Object.keys(policy.annualCharges).map(band => [band, `Band ${band}`]))
   const benefitOptions = Object.fromEntries(Object.entries(policy.benefitRules).map(([id, rule]) => [id, rule.label]))
   const period = figures.payFrequency
 
-  function figure<K extends keyof Figures>(id: K, title: string, config: Omit<Partial<Question>, 'id' | 'title' | 'value' | 'save'> = {}): Question {
-    return { id, title, value: figures[id], save: value => onUpdate(id, value as Figures[K]), ...config }
+  function figure<K extends keyof Figures>(id: K, title: string, config: Omit<Partial<Question>, 'id' | 'title' | 'value' | 'change'> = {}): Question {
+    return { id, title, value: figures[id], change: value => onUpdate(id, value as Figures[K]), ...config }
   }
 
-  function navigate(next: number) {
-    setIndex(next)
-    setDraft(null)
+  function goTo(id: string) {
+    setStepId(id)
     setIssue('')
+    setChecking(false)
   }
 
   const questions: Question[] = [
     {
-      id: 'scope', title: 'Does this estimate fit your circumstances?', value: scope,
-      hint: 'Use this for a working-age Newham case with the full band charge, no discounts and no non-dependant deductions. It covers employed earnings and supported benefits. Newham Council decides the actual award.',
-      options: { ...yesNo, unknown: 'Not sure' },
-      save: value => {
-        setScope(value)
-        if (value !== 'yes') return 'Confirm that this calculator covers your case before continuing.'
+      id: 'newham', title: 'Is the home on your Council Tax bill in Newham?', value: newham,
+      options: yesNoUnsure, change: setNewham,
+      check: {
+        title: 'Check which council bills you',
+        guidance: <>Look for the council name at the top of your bill. If you don’t have it, <a href="https://www.gov.uk/find-local-council">find your council by postcode on GOV.UK</a>. This estimate uses Newham’s scheme.</>,
+      },
+    },
+    {
+      id: 'working-age', title: 'Are you below State Pension age?', value: workingAge,
+      options: yesNoUnsure, change: setWorkingAge,
+      check: {
+        title: 'Check your State Pension age',
+        guidance: <>Use your date of birth to <a href="https://www.gov.uk/state-pension-age">check your State Pension age on GOV.UK</a>. If you’ve reached that age, see <a href={sources.guide}>Newham’s guidance for pension-age residents</a>.</>,
       },
     },
     figure('year', 'Which financial year are you checking?', { options: years }),
@@ -92,155 +105,179 @@ export function GuidedQuestions(props: Props) {
       hint: 'Use your qualifying contributions and exclude salary sacrifice. Leave blank if you pay none.', blankAllowed: true,
     }),
     {
-      id: 'benefits', title: 'Do you receive any benefits?', value: benefits.length ? 'yes' : benefitsAnswer,
-      options: yesNo, save: value => {
-        setBenefitsAnswer(value)
-        if (value === 'yes' && benefits.length === 0) onAddBenefit()
-        if (value === 'no' && benefits.length > 0) onClearBenefits()
-      },
+      id: 'benefits', title: 'Do you receive any benefits?',
+      value: benefitsChoice ?? (benefits.length ? 'yes' : noBenefitsConfirmed ? 'no' : ''),
+      hint: benefits.length ? 'Choose Yes to keep the payments you’ve entered.' : undefined,
+      options: yesNo, change: setBenefitsChoice,
     },
     ...benefits.flatMap<Question>((benefit, position) => [
       {
         id: `benefit-type-${position}`, title: `What type is benefit payment ${position + 1}?`,
         value: benefit.type, options: benefitOptions,
-        save: value => {
-          const type = value as keyof typeof policy.benefitRules
-          onChangeBenefit(benefit.id, { type })
-          const rule = policy.benefitRules[type]
-          if (rule.treatment === 'special' || rule.treatment === 'unsupported') {
-            return `${rule.label} needs further assessment. ${rule.rule}`
-          }
-        },
-        remove: () => {
-          onRemoveBenefit(benefit.id)
-          if (benefits.length === 1) setBenefitsAnswer('no')
-          navigate(benefits.length === 1 ? index - 1 : index)
-        },
+        change: value => onChangeBenefit(benefit.id, { type: value as BenefitPayment['type'] }),
       },
       {
         id: `benefit-payment-${position}`, title: `How much is benefit payment ${position + 1}?`,
         value: benefit.payment, hint: 'Enter the gross award before any recovery deductions.',
-        save: value => onChangeBenefit(benefit.id, { payment: value }),
+        change: value => onChangeBenefit(benefit.id, { payment: value }),
       },
       {
         id: `benefit-frequency-${position}`, title: `How often is benefit payment ${position + 1} paid?`,
         value: benefit.frequency, options: benefitFrequencies,
-        save: value => onChangeBenefit(benefit.id, { frequency: value as BenefitPayment['frequency'] }),
+        change: value => onChangeBenefit(benefit.id, { frequency: value as BenefitPayment['frequency'] }),
       },
     ]),
     ...(benefits.length ? [{
-      id: 'more-benefits', title: 'Do you receive another benefit?', value: '', options: yesNo,
-      save: (value: string) => { if (value === 'yes') onAddBenefit() },
+      id: 'more-benefits', title: 'Do you receive another benefit?', value: moreBenefits, options: yesNo,
+      change: setMoreBenefits,
     }] : []),
     figure('weeklyApplicableAmount', 'What is your weekly applicable amount?', {
-      hint: 'Enter the income allowance that applies to your circumstances. If you are unsure, enter “unknown”.',
+      hint: assessmentFigures.weeklyApplicableAmount.explanation + ' Leave blank if you’re unsure.',
+      blankAllowed: true,
     }),
     figure('weeklyEarningsDisregard', 'What is your weekly earnings disregard?', {
-      hint: 'Enter the amount of weekly earnings that can be set aside. Leave blank if you had no net earnings, or enter “unknown” if you are unsure.',
+      hint: assessmentFigures.weeklyEarningsDisregard.explanation + ' Leave blank if you have no take-home pay or you’re unsure.',
       blankAllowed: true,
     }),
   ]
 
-  const question = questions[index]
+  const index = questions.findIndex(question => question.id === stepId)
+  const question = stepId === 'estimate' ? undefined : questions[index] ?? questions.find(question => question.id === 'benefits')!
   const questionId = question?.id
-  useEffect(() => { heading.current?.focus() }, [questionId, benefits.length])
+  useEffect(() => {
+    if (active && questionId) heading.current?.focus()
+  }, [active, benefits.length, checking, questionId])
 
   function continueQuestions(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!question) return
 
-    const answer = (draft ?? question.value).trim()
+    const answer = question.value.trim()
+    let error = ''
     if (question.options ? !Object.hasOwn(question.options, answer) : !answer && !question.blankAllowed) {
-      setIssue(question.options ? 'Choose an answer to continue.' : 'Enter the amount before continuing.')
-      return
+      error = question.options ? 'Choose an answer to continue.' : 'Enter the amount before continuing.'
+    } else if (!question.options && answer && parsePounds(answer) === null) {
+      error = 'Enter a non-negative amount in pounds with up to two decimal places.'
     }
-    if (!question.options && answer && parsePounds(answer) === null) {
-      setIssue(answer.toLowerCase() === 'unknown'
-        ? 'You’ll need this figure before an estimate is possible.'
-        : 'Enter a non-negative amount in pounds with up to two decimal places.')
-      return
-    }
-    const error = question.save(answer)
     if (error) {
       setIssue(error)
+      controlRef.current?.focus()
       return
     }
-    navigate(question.id === 'more-benefits' && answer === 'yes' ? index : index + 1)
+    if (question.check && answer !== 'yes') {
+      setChecking(true)
+      return
+    }
+
+    if (question.id === 'benefits') {
+      setBenefitsChoice(null)
+      setNoBenefitsConfirmed(answer === 'no')
+      if (answer === 'no') {
+        onClearBenefits()
+        goTo('weeklyApplicableAmount')
+      } else {
+        if (benefits.length === 0) onAddBenefit()
+        goTo('benefit-type-0')
+      }
+      return
+    }
+    if (question.id === 'more-benefits' && answer === 'yes') {
+      onAddBenefit()
+      setMoreBenefits('')
+      goTo(`benefit-type-${benefits.length}`)
+      return
+    }
+
+    const next = questions[questions.indexOf(question) + 1]
+    goTo(next?.id ?? 'estimate')
+    if (!next) onSubmit()
   }
 
   function startOver() {
-    setScope('')
-    setBenefitsAnswer('')
+    setNewham('')
+    setWorkingAge('')
+    setBenefitsChoice(null)
+    setNoBenefitsConfirmed(false)
+    setMoreBenefits('')
     onReset()
-    navigate(0)
-    heading.current?.focus()
+    goTo('newham')
   }
 
-  const summary = result ? guidedResult(result) : null
-  const incompleteField = result?.status === 'insufficient' && result.assessableEarnings === null
-    ? 'weeklyEarningsDisregard'
-    : undefined
-  const editIndex = questions.findIndex(item => item.id === (validationError?.field ?? incompleteField))
-  const title = question?.title ?? summary?.verdict ?? 'Cannot estimate yet'
+  function removePayment(position: number) {
+    onRemoveBenefit(benefits[position].id)
+    if (benefits.length === 1) {
+      setNoBenefitsConfirmed(true)
+      goTo('benefits')
+    } else {
+      goTo(position === benefits.length - 1 ? 'more-benefits' : `benefit-type-${position}`)
+    }
+  }
+
+  if (!question) {
+    return (
+      <>
+        {active && renderEstimate(goTo)}
+        <div className="guided-actions">
+          <button type="button" className="secondary" onClick={() => goTo('weeklyEarningsDisregard')}>Back to answers</button>
+          <button type="button" className="text-button" onClick={startOver}>Start over</button>
+        </div>
+      </>
+    )
+  }
+
+  if (checking && question.check) {
+    return (
+      <section className="panel guided" aria-labelledby="guided-heading">
+        <h2 ref={heading} id="guided-heading" tabIndex={-1}>{question.check.title}</h2>
+        <p className="guided-hint">{question.check.guidance}</p>
+        <div className="guided-actions">
+          <button type="button" className="secondary" onClick={() => setChecking(false)}>Back to your answer</button>
+        </div>
+      </section>
+    )
+  }
+
+  const previous = questions[questions.indexOf(question) - 1]
+  const benefitType = question.id.startsWith('benefit-type-')
   const control = {
-    value: draft ?? question?.value ?? '',
+    value: question.value,
     'aria-labelledby': 'guided-heading',
-    'aria-describedby': [question?.hint && 'guided-hint', issue && 'guided-error'].filter(Boolean).join(' ') || undefined,
+    'aria-describedby': [question.hint && 'guided-hint', issue && 'guided-error'].filter(Boolean).join(' ') || undefined,
     'aria-invalid': issue ? true : undefined,
     onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      setDraft(event.target.value)
+      question.change(event.target.value)
       setIssue('')
     },
   }
 
   return (
     <section className="panel guided" aria-labelledby="guided-heading">
-      <h2 ref={heading} id="guided-heading" tabIndex={-1}>{title}</h2>
-      {question ? (
-        <form onSubmit={continueQuestions} noValidate autoComplete="off">
-          {question.hint && <p id="guided-hint" className="guided-hint">{question.hint}</p>}
-          {question.id === 'band' && <p className="hint"><a href="https://www.gov.uk/council-tax-bands" target="_blank" rel="noreferrer">Find your band on GOV.UK (opens in a new tab)</a></p>}
-          <div className="guided-input">
-            {question.options ? (
-              <select {...control}>
-                <option value="">Choose an answer</option>
-                {Object.entries(question.options).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            ) : (
-              <div className="money-input">
-                <span aria-hidden="true">£</span>
-                <input {...control} inputMode="decimal" autoComplete="off" spellCheck={false} />
-              </div>
-            )}
-          </div>
-          {issue && <p id="guided-error" className="error" role="alert">{issue}</p>}
-          <div className="guided-actions">
-            {index > 0 && <button type="button" className="secondary" onClick={() => navigate(index - 1)}>Back</button>}
-            <button type="submit" className="primary">{index === questions.length - 1 ? 'See estimate' : 'Continue'}</button>
-            {question.remove && <button type="button" className="text-button" onClick={question.remove}>Remove this payment</button>}
-            {index > 0 && <button type="button" className="text-button" onClick={startOver}>Start over</button>}
-          </div>
-        </form>
-      ) : (
-        <>
-          {summary ? (
-            <div className="guided-verdict">
-              <p className="guided-percentage">{summary.percentage}</p>
-              <ul>{summary.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>
-            </div>
+      <h2 ref={heading} id="guided-heading" tabIndex={-1}>{question.title}</h2>
+      <form onSubmit={continueQuestions} noValidate autoComplete="off">
+        {question.hint && <p id="guided-hint" className="guided-hint">{question.hint}</p>}
+        {question.id === 'band' && <p className="hint"><a href="https://www.gov.uk/council-tax-bands" target="_blank" rel="noreferrer">Find your band on GOV.UK (opens in a new tab)</a></p>}
+        <div className="guided-input">
+          {question.options ? (
+            <select {...control} ref={node => { controlRef.current = node }} data-empty={question.value === '' || undefined}>
+              <option value="">Choose an answer</option>
+              {Object.entries(question.options).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
           ) : (
-            <div className="guided-verdict">
-              {validationError && <p className="error">{validationError.message}</p>}
-              {result?.status === 'insufficient' && <ul>{result.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>}
+            <div className="money-input">
+              <span aria-hidden="true">£</span>
+              <input {...control} ref={node => { controlRef.current = node }} inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="0.00" />
             </div>
           )}
-          <div className="guided-actions">
-            <button type="button" className="secondary" onClick={() => navigate(index - 1)}>Back</button>
-            {editIndex >= 0 && <button type="button" className="primary" onClick={() => navigate(editIndex)}>Correct answer</button>}
-            <button type="button" className="text-button" onClick={startOver}>Start over</button>
-          </div>
-        </>
-      )}
+        </div>
+        {issue && <p id="guided-error" className="error" role="alert">{issue}</p>}
+        <div className="guided-actions">
+          {previous && <button type="button" className="secondary" onClick={() => goTo(previous.id)}>Back</button>}
+          <button type="submit" className="primary">{question.id === 'weeklyEarningsDisregard' ? 'See estimate' : 'Continue'}</button>
+          {benefitType && <button type="button" className="text-button"
+            onClick={() => removePayment(Number(question.id.slice('benefit-type-'.length)))}>Remove this payment</button>}
+          {previous && <button type="button" className="text-button" onClick={startOver}>Start over</button>}
+        </div>
+      </form>
     </section>
   )
 }
