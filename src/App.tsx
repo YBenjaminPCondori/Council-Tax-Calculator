@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { BandGuide } from './BandGuide'
+import { GuidedQuestions, type BenefitRow } from './GuidedQuestions'
 import { WalkthroughPanel } from './Results'
 import {
   benefitFrequencies, calculate, CalculationInputError, employmentFrequencies,
@@ -21,7 +22,6 @@ const initialInput: Omit<CalculationInput, 'benefits'> = {
   nationalInsurance: '', employeePension: '', weeklyEarningsDisregard: '', weeklyApplicableAmount: '',
 }
 
-type BenefitRow = BenefitPayment & { id: number }
 type Options = Readonly<Record<string, string>>
 type Theme = 'light' | 'dark'
 
@@ -90,6 +90,7 @@ function ThemePicker() {
 
 export function App() {
   const [view, setView] = useState(currentView)
+  const [calculatorMode, setCalculatorMode] = useState<'form' | 'guided'>('form')
   const [input, setInput] = useState(initialInput)
   const [benefits, setBenefits] = useState<BenefitRow[]>([])
   const [guideOpen, setGuideOpen] = useState(false)
@@ -100,13 +101,14 @@ export function App() {
   const guideTrigger = useRef<HTMLButtonElement>(null)
   const guideHeading = useRef<HTMLHeadingElement>(null)
 
-  const { trace, validationError } = useMemo(() => {
+  const { result, trace, validationError } = useMemo(() => {
     const scenario = { ...input, benefits }
     try {
-      return { trace: buildWalkthrough(scenario, calculate(scenario)), validationError: null }
+      const result = calculate(scenario)
+      return { result, trace: buildWalkthrough(scenario, result), validationError: null }
     } catch (problem) {
       if (!(problem instanceof CalculationInputError)) throw problem
-      return { trace: buildWalkthrough(scenario, null), validationError: problem }
+      return { result: null, trace: buildWalkthrough(scenario, null), validationError: problem }
     }
   }, [input, benefits])
 
@@ -126,13 +128,14 @@ export function App() {
     return () => cancelAnimationFrame(frame)
   }, [view])
 
-  function update<K extends Exclude<keyof CalculationInput, 'benefits'>>(field: K, value: CalculationInput[K]) {
+  function update<K extends keyof typeof initialInput>(field: K, value: (typeof initialInput)[K]) {
     setInput(current => ({ ...current, [field]: value }))
     setError(null)
   }
 
   function useMapBand(band: CouncilTaxBand) {
     if (input.band !== band) update('band', band)
+    setCalculatorMode('form')
     setGuideOpen(false)
     focusBandOnReturn.current = true
     window.location.hash = 'calculator'
@@ -143,21 +146,40 @@ export function App() {
     setError(null)
   }
 
-  function addBenefit() {
+  function appendBenefit() {
     const id = nextId.current++
-    const index = benefits.length
     setBenefits(current => [...current, { id, type: '', payment: '', frequency: 'weekly' }])
     setError(null)
+  }
+
+  function addBenefit() {
+    const index = benefits.length
+    appendBenefit()
     requestAnimationFrame(() => document.getElementById(`benefit-type-${index}`)?.focus())
   }
 
-  function removeBenefit(id: number, index: number) {
+  function discardBenefit(id: number) {
     setBenefits(current => current.filter(row => row.id !== id))
     setError(null)
+  }
+
+  function removeBenefit(id: number, index: number) {
+    discardBenefit(id)
     requestAnimationFrame(() => {
       const next = document.getElementById(`benefit-type-${index}`) ?? document.getElementById('add-benefit')
       next?.focus()
     })
+  }
+
+  function clearBenefits() {
+    setBenefits([])
+    setError(null)
+  }
+
+  function resetFigures() {
+    setInput(initialInput)
+    clearBenefits()
+    setGuideOpen(false)
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -202,8 +224,16 @@ export function App() {
           </nav>
           <h1>{view === 'calculator' ? 'Council Tax Reduction Calculator' : 'Council Tax band map'}</h1>
           <p>{view === 'calculator'
-            ? 'Estimate your Newham Council Tax bill and see how your figures are used in the calculation.'
+            ? calculatorMode === 'guided'
+              ? 'Answer one question at a time to estimate your Newham Council Tax Reduction.'
+              : 'Estimate your Newham Council Tax bill and see how your figures are used in the calculation.'
             : 'Explore the flats at Woolspinners House and Softwood House on Carrack Mews.'}</p>
+          {view === 'calculator' && (
+            <div className="calculator-mode" role="group" aria-label="Calculator mode">
+              <button type="button" aria-pressed={calculatorMode === 'form'} onClick={() => setCalculatorMode('form')}>Form</button>
+              <button type="button" aria-pressed={calculatorMode === 'guided'} onClick={() => setCalculatorMode('guided')}>Guided questions</button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -215,7 +245,15 @@ export function App() {
         </main>
       )}
 
-      {view === 'calculator' && <main className="page layout" id="main-content" tabIndex={-1}>
+      {view === 'calculator' && calculatorMode === 'guided' && (
+        <main className="page guided-layout" id="main-content" tabIndex={-1}>
+          <GuidedQuestions figures={input} benefits={benefits} result={result} validationError={validationError}
+            onUpdate={update} onChangeBenefit={changeBenefit} onAddBenefit={appendBenefit}
+            onRemoveBenefit={discardBenefit} onClearBenefits={clearBenefits} onReset={resetFigures} />
+        </main>
+      )}
+
+      {view === 'calculator' && calculatorMode === 'form' && <main className="page layout" id="main-content" tabIndex={-1}>
         <form className="panel form" onSubmit={submit} noValidate autoComplete="off" aria-labelledby="figures-heading">
           <h2 id="figures-heading">Your figures</h2>
           <fieldset>

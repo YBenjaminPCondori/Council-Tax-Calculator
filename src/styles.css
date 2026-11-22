@@ -67,10 +67,12 @@ a { color: var(--accent); text-underline-offset: .2em; }
 .eyebrow { color: var(--accent); font-size: .9rem; font-weight: 720; letter-spacing: .04em; }
 .hero h1 { margin: .65rem 0 .65rem; font-size: clamp(1.9rem, 4.4vw, 3.2rem); letter-spacing: -.045em; line-height: 1.1; }
 .hero .page > p { max-width: 45rem; color: var(--muted); }
-.theme-picker { display: inline-flex; gap: .22rem; padding: .22rem; border: 1px solid var(--control-border); border-radius: .55rem; background: var(--surface); }
-.theme-picker button { min-width: 3.65rem; min-height: 2.25rem; padding: .2rem .65rem; border: 1px solid transparent; border-radius: .32rem; background: transparent; color: var(--text); font-size: .9rem; font-weight: 700; }
-.theme-picker button:hover { background: var(--tint); }
-.theme-picker button[aria-pressed='true'] { background: var(--action); color: var(--action-text); }
+.theme-picker, .calculator-mode { display: inline-flex; flex-wrap: wrap; gap: .22rem; padding: .22rem; border: 1px solid var(--control-border); border-radius: .55rem; background: var(--surface); }
+.theme-picker button, .calculator-mode button { min-width: 3.65rem; min-height: 2.25rem; padding: .2rem .65rem; border: 1px solid transparent; border-radius: .32rem; background: transparent; color: var(--text); font-size: .9rem; font-weight: 700; }
+.theme-picker button:hover, .calculator-mode button:hover { background: var(--tint); }
+.theme-picker button[aria-pressed='true'], .calculator-mode button[aria-pressed='true'] { background: var(--action); color: var(--action-text); }
+.calculator-mode { margin-top: 1rem; }
+.calculator-mode button { min-height: 2.75rem; padding-inline: .9rem; }
 
 .app-navigation { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .9rem; }
 .app-navigation a { padding: .45rem .8rem; border: 1px solid transparent; border-radius: .5rem; font-weight: 700; text-decoration: none; }
@@ -123,6 +125,16 @@ input::placeholder { color: var(--muted); opacity: 1; }
 .submit-area { margin-top: 1.55rem; }
 .submit-area .primary { width: 100%; }
 .submit-area .hint { text-align: center; }
+
+.guided-layout { padding-block: 1.65rem; }
+.guided { max-width: 42rem; padding: clamp(1rem, 4vw, 2rem); }
+.guided h2 { font-size: clamp(1.35rem, 3.2vw, 1.85rem); }
+.guided-hint { max-width: 54ch; margin-top: .6rem; color: var(--muted); }
+.guided-input { max-width: 27rem; margin-top: 1.05rem; }
+.guided-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin-top: 1.25rem; }
+.guided-verdict { margin-top: .85rem; overflow-wrap: anywhere; }
+.guided-percentage { color: var(--accent); font-size: clamp(1.2rem, 3.2vw, 1.6rem); font-weight: 700; }
+.guided-verdict ul { padding-inline-start: 1.25rem; margin: .65rem 0 0; }
 
 .results-column { display: grid; gap: 1rem; min-width: 0; }
 .walkthrough, .band-guide { padding: clamp(1rem, 2.6vw, 1.5rem); }
